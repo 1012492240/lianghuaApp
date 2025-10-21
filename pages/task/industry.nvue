@@ -1,0 +1,1646 @@
+<template>
+	<view class="container">
+		<!-- 自定义导航栏 -->
+		<view class="nav-bar" :style="{ paddingTop: statusBarHeight + 10 + 'px' }">
+			<view class="nav-content">
+				<!-- 左侧返回按钮 -->
+				<view class="nav-left" @click="onBackClick">
+					<u-icon name="arrow-left" size="20" color="#333333"></u-icon>
+				</view>
+				<!-- 居中标题 -->
+				<text class="nav-title">行业获客</text>
+				<!-- 右侧记录按钮 -->
+				<view class="nav-right" @click="onRecordClick">
+					<u-icon name="file-text" size="22" color="#333333"></u-icon>
+				</view>
+			</view>
+		</view>
+		
+		<!-- 搜索条件区域 -->
+		<view class="search-area">
+    <up-modal
+		:show="showModal"
+		:content="modalContent"
+    :closeOnClickOverlay="true"
+		showCancelButton
+		@confirm="gotoList"
+		@cancel="closeModal"
+		confirmText="查看列表"
+		cancelText="确定"
+	></up-modal>
+			<!-- 当前位置选择 -->
+			<view class="search-item" @click="showPicker">
+				<view class="input-box">
+					<text class="input-box-text" v-if="realRegion.province">
+						{{realRegion.province}}-{{realRegion.city}}-{{realRegion.district}}
+					</text>
+					<text class="input-box-text" v-else>
+						选择省市区
+					</text>
+				</view>
+			</view>
+			
+			<!-- 关键词搜索 -->
+			<view class="search-item" @click="showIndustryPicker = true">
+				<view class="input-box">
+					<text class="input-box-text" v-if="realIndustry.industry">
+						{{realIndustry.industry}}-{{realIndustry.industrySecond}}
+					</text>
+					<text class="input-box-text" v-else>
+						请选择行业
+					</text>
+				</view>
+			</view>
+		</view>
+		
+		<!-- 地图区域 -->
+		<view class="map-container">
+			<map 
+				id="map" 
+				class="map"
+				:latitude="mapState.latitude"
+				:longitude="mapState.longitude"
+				:markers="mapState.markers"
+				:scale="mapState.scale"
+				@markertap="onMarkerTap"
+				show-location
+			></map>
+		</view>
+		
+		<!-- 底部按钮 -->
+		<view class="footer">
+			<text class="collect-btn" @tap="startCollect">开始采集</text>
+		</view>
+
+		<!-- 省市区选择器 -->
+		<view class="picker-container" v-if="show">
+			<up-picker 
+				:show="show" 
+			  :defaultIndex="defaultCityArray"
+				ref="uPickerRef" 
+				:columns="columns" 
+				@cancel="cancel" 
+				@confirm="confirm"
+				@change="changeHandler"
+			></up-picker>
+		</view>
+
+		<!-- 添加行业选择器 -->
+		<view class="picker-container" v-if="showIndustryPicker">
+			<up-picker 
+				:show="showIndustryPicker"
+				:columns="columnsIndustry"
+				@cancel="onIndustryCancel"
+				@confirm="onIndustryConfirm"
+				@change="onIndustryChange"
+        :defaultIndex="industryArray"
+			></up-picker>
+		</view>
+
+	</view>
+
+	<!-- 弹窗 -->
+	
+</template>
+
+<script setup>
+import { reactive, ref, onMounted } from 'vue'
+// import { useCollectStore } from '@/stores/collect'
+import { addressList } from './cityData.js'
+import { formatDate } from '@/utils/date'
+
+const defaultCityArray = ref([])
+const industryArray = ref([])
+const collect_batch_id = ref('')
+const gotoList = () => {
+    // 将采集数据和位置信息存储到本地
+    uni.setStorageSync('collectedItems', collectedItems.value)
+    // 修改这里，保存省市区信息
+    const address = realRegion.province && realRegion.city && realRegion.district ? 
+        `${realRegion.province}-${realRegion.city}-${realRegion.district}` : 
+        '未选择地址'
+    uni.setStorageSync('collectInfo', address)
+    uni.setStorageSync('searchKeyword', keyword.value)
+    uni.setStorageSync('industry_name', `${realIndustry.industry}-${realIndustry.industrySecond}`)
+    uni.setStorageSync('collect_time', formatDate(new Date()))
+
+  uni.navigateTo({
+    url: `/pages/task/list?collect_batch_id=${collect_batch_id.value}`
+})
+
+
+}
+
+// const collectStore = useCollectStore()
+const show = ref(false);
+const loading = ref(false);
+
+// 用来存储选择的数据
+const selectedRegion = reactive({
+  province: null,
+  city: null,
+  cityCode: null,
+  district: null,
+  districtCode: null,
+  provinceIndex: null,
+  provinceCode: null,
+  cityIndex: null,
+  districtIndex: null
+});
+
+const realRegion = reactive({
+    province: null,
+  city: null,
+  cityCode: null,
+  district: null,
+  districtCode: null,
+  provinceIndex: null,
+  provinceCode: null,
+  cityIndex: null,
+  districtIndex: null
+});
+
+
+const realIndustry = reactive({
+	industryIndex:null,
+	industry: null,
+	industryCode: null,
+	industrySecond: null,
+	industrySecondCode: null,
+	industrySecondIndex:null,
+})
+
+
+const onIndustryConfirm = () => {
+	realIndustry.industry = selectedIndustry.industry;
+	realIndustry.industryCode = selectedIndustry.industryCode;
+	realIndustry.industryIndex = selectedIndustry.industryIndex;
+	realIndustry.industrySecond = selectedIndustry.industrySecond;
+	realIndustry.industrySecondCode = selectedIndustry.industrySecondCode;
+	realIndustry.industrySecondIndex = selectedIndustry.industrySecondIndex;
+	showIndustryPicker.value = false;
+  console.log(realIndustry.industryIndex, realIndustry.industrySecondIndex,'realIndustry')
+  industryArray.value = [realIndustry.industryIndex, realIndustry.industrySecondIndex]
+	console.log(industryArray.value,'industryArray')
+	
+}
+
+const selectedIndustry = reactive({
+	industryIndex:null,
+	industry: null,
+	industryCode: null,
+	industrySecond: null,
+	industrySecondCode: null,
+	industrySecondIndex:null,
+})
+
+
+// 省市区数据
+const regionData = addressList
+const indestryData = [
+{
+  "code": "050000",
+  "name": "餐饮服务",
+  "children": [
+    {
+      "code": "050100",
+      "name": "中餐厅"
+    },
+    {
+      "code": "050200",
+      "name": "外国餐厅"
+    },
+    {
+      "code": "050300",
+      "name": "快餐厅"
+    },
+    {
+      "code": "050400",
+      "name": "休闲餐饮场所"
+    },
+    {
+      "code": "050500",
+      "name": "咖啡厅"
+    },
+    {
+      "code": "050600",
+      "name": "茶艺馆"
+    },
+    {
+      "code": "050700",
+      "name": "冷饮店"
+    },
+    {
+      "code": "050800",
+      "name": "糕饼店"
+    },
+    {
+      "code": "050900",
+      "name": "甜品店"
+    }
+  ]
+},
+{
+    "code": "060000",
+    "name": "购物服务",
+    "children": [
+      {
+        "code": "060100",
+        "name": "商场"
+      },
+      {
+        "code": "060200",
+        "name": "便民商店/便利店"
+      },
+      {
+        "code": "060300",
+        "name": "家电电子卖场"
+      },
+      {
+        "code": "060400",
+        "name": "超级市场"
+      },
+      {
+        "code": "060500",
+        "name": "花鸟鱼虫市场"
+      },
+      {
+        "code": "060600",
+        "name": "家居建材市场"
+      },
+      {
+        "code": "060700",
+        "name": "综合市场"
+      },
+      {
+        "code": "060800",
+        "name": "文化用品店"
+      },
+      {
+        "code": "060900",
+        "name": "体育用品店"
+      },
+      {
+        "code": "061000",
+        "name": "特色商业街"
+      },
+      {
+        "code": "061100",
+        "name": "服装鞋帽皮具店"
+      },
+      {
+        "code": "061200",
+        "name": "专卖店"
+      },
+      {
+        "code": "061300",
+        "name": "特殊买卖场所"
+      },
+      {
+        "code": "061400",
+        "name": "个人用品/化妆品店"
+      }
+    ]
+  },
+  {
+    "code": "070000",
+    "name": "生活服务",
+    "children": [
+      {
+        "code": "070100",
+        "name": "旅行社"
+      },
+      {
+        "code": "070200",
+        "name": "信息咨询中心"
+      },
+      {
+        "code": "070300",
+        "name": "售票处"
+      },
+      {
+        "code": "070400",
+        "name": "邮局"
+      },
+      {
+        "code": "070500",
+        "name": "物流速递"
+      },
+      {
+        "code": "070600",
+        "name": "电讯营业厅"
+      },
+      {
+        "code": "070700",
+        "name": "事务所"
+      },
+      {
+        "code": "070800",
+        "name": "人才市场"
+      },
+      {
+        "code": "070900",
+        "name": "自来水营业厅"
+      },
+      {
+        "code": "071000",
+        "name": "电力营业厅"
+      },
+      {
+        "code": "071100",
+        "name": "美容美发店"
+      },
+      {
+        "code": "071200",
+        "name": "维修站点"
+      },
+      {
+        "code": "071300",
+        "name": "摄影冲印店"
+      },
+      {
+        "code": "071400",
+        "name": "洗浴推拿场所"
+      },
+      {
+        "code": "071500",
+        "name": "洗衣店"
+      },
+      {
+        "code": "071600",
+        "name": "中介机构"
+      },
+      {
+        "code": "071700",
+        "name": "搬家公司"
+      },
+      {
+        "code": "071800",
+        "name": "彩票彩券销售点"
+      },
+      {
+        "code": "071900",
+        "name": "丧葬设施"
+      },
+      {
+        "code": "072000",
+        "name": "婴儿服务场所"
+      }
+    ]
+  },
+  {
+    "code": "080000",
+    "name": "体育休闲服务",
+    "children": [
+      {
+        "code": "080100",
+        "name": "运动场馆"
+      },
+      {
+        "code": "080200",
+        "name": "高尔夫相关"
+      },
+      {
+        "code": "080300",
+        "name": "娱乐场所"
+      },
+      {
+        "code": "080400",
+        "name": "度假疗养场所"
+      },
+      {
+        "code": "080500",
+        "name": "休闲场所"
+      },
+      {
+        "code": "080600",
+        "name": "影剧院"
+      },
+	  
+    ]
+  },
+  {
+    "code": "090000",
+    "name": "医疗保健服务",
+    "children": [
+      {
+        "code": "090100",
+        "name": "综合医院"
+      },
+      {
+        "code": "090200",
+        "name": "专科医院"
+      },
+      {
+        "code": "090300",
+        "name": "诊所"
+      },
+      {
+        "code": "090400",
+        "name": "急救中心"
+      },
+      {
+        "code": "090500",
+        "name": "疾病预防机构"
+      },
+      {
+        "code": "090600",
+        "name": "医药保健销售店"
+      },
+      {
+        "code": "090700",
+        "name": "动物医疗场所"
+      }
+    ]
+  },
+  {
+    "code": "100000",
+    "name": "住宿服务",
+    "children": [
+      {
+        "code": "100100",
+        "name": "宾馆酒店"
+      },
+      {
+        "code": "100200",
+        "name": "旅馆招待所"
+      }
+    ]
+  },
+  {
+    "code": "110000",
+    "name": "风景名胜",
+    "children": [
+      {
+        "code": "110100",
+        "name": "公园广场"
+      },
+      {
+        "code": "110200",
+        "name": "风景名胜"
+      }
+    ]
+  },
+  {
+    "code": "120000",
+    "name": "商务住宅",
+    "children": [
+      {
+        "code": "120100",
+        "name": "产业园区"
+      },
+      {
+        "code": "120200",
+        "name": "楼宇"
+      },
+      {
+        "code": "120300",
+        "name": "住宅区"
+      }
+    ]
+  },
+  {
+    "code": "130000",
+    "name": "政府机构及社会团体",
+    "children": [
+      {
+        "code": "130100",
+        "name": "政府机关"
+      },
+      {
+        "code": "130200",
+        "name": "外国机构"
+      },
+      {
+        "code": "130300",
+        "name": "民主党派"
+      },
+      {
+        "code": "130400",
+        "name": "社会团体"
+      },
+      {
+        "code": "130500",
+        "name": "公检法机构"
+      },
+      {
+        "code": "130600",
+        "name": "交通车辆管理"
+      },
+      {
+        "code": "130700",
+        "name": "工商税务机构"
+      }
+    ]
+  },
+  {
+    "code": "140000",
+    "name": "科教文化服务",
+    "children": [
+      {
+        "code": "140100",
+        "name": "博物馆"
+      },
+      {
+        "code": "140200",
+        "name": "展览馆"
+      },
+      {
+        "code": "140300",
+        "name": "会展中心"
+      },
+      {
+        "code": "140400",
+        "name": "美术馆"
+      },
+      {
+        "code": "140500",
+        "name": "图书馆"
+      },
+      {
+        "code": "140600",
+        "name": "科技馆"
+      },
+      {
+        "code": "140700",
+        "name": "天文馆"
+      },
+      {
+        "code": "140800",
+        "name": "文化宫"
+      },
+      {
+        "code": "140900",
+        "name": "档案馆"
+      },
+      {
+        "code": "141000",
+        "name": "文艺团体"
+      },
+      {
+        "code": "141100",
+        "name": "传媒机构"
+      },
+      {
+        "code": "141200",
+        "name": "学校"
+      },
+      {
+        "code": "141300",
+        "name": "科研机构"
+      },
+      {
+        "code": "141400",
+        "name": "培训机构"
+      },
+      {
+        "code": "141500",
+        "name": "驾校"
+      }
+    ]
+  },
+  {
+    "code": "150000",
+    "name": "交通设施服务",
+    "children": [
+      {
+        "code": "150100",
+        "name": "机场相关"
+      },
+      {
+        "code": "150200",
+        "name": "火车站"
+      },
+      {
+        "code": "150300",
+        "name": "港口码头"
+      },
+      {
+        "code": "150400",
+        "name": "长途汽车站"
+      },
+      {
+        "code": "150500",
+        "name": "地铁站"
+      },
+      {
+        "code": "150600",
+        "name": "轻轨站"
+      },
+      {
+        "code": "150700",
+        "name": "公交车站"
+      },
+      {
+        "code": "150800",
+        "name": "班车站"
+      },
+      {
+        "code": "150900",
+        "name": "停车场"
+      },
+      {
+        "code": "151000",
+        "name": "过境口岸"
+      },
+      {
+        "code": "151100",
+        "name": "出租车"
+      },
+      {
+        "code": "151200",
+        "name": "轮渡站"
+      },
+      {
+        "code": "151300",
+        "name": "索道站"
+      }
+    ]
+  },
+  {
+    "code": "160000",
+    "name": "金融保险服务",
+    "children": [
+      {
+        "code": "160100",
+        "name": "金融保险服务机构"
+      },
+      {
+        "code": "160200",
+        "name": "银行相关"
+      },
+      {
+        "code": "160300",
+        "name": "自动提款机"
+      },
+      {
+        "code": "160400",
+        "name": "保险公司"
+      },
+      {
+        "code": "160500",
+        "name": "证券公司"
+      },
+      {
+        "code": "160600",
+        "name": "财务公司"
+      }
+    ]
+  },
+  {
+    "code": "170000",
+    "name": "公司企业",
+    "children": [
+      {
+        "code": "170100",
+        "name": "知名企业"
+      },
+      {
+        "code": "170200",
+        "name": "公司"
+      },
+      {
+        "code": "170300",
+        "name": "工厂"
+      },
+      {
+        "code": "170400",
+        "name": "农林牧渔基地"
+      }
+    ]
+  },
+];
+// 初始化 columns
+const columns = reactive([[], [], []]);
+
+const columnsIndustry = reactive([[], [],]);
+
+// 填充省级数据
+const fillProvinceData = () => {
+  columns[0] = regionData.map(item => item.name);
+};
+
+// 填充市级数据
+const fillCityData = (provinceIndex) => {
+  const province = regionData[provinceIndex];
+  columns[1] = province.children.map(item => item.name);
+  console.log(columns[1],'province')
+};
+
+// 填充区级数据
+const fillDistrictData = (provinceIndex, cityIndex) => {
+  const city = regionData[provinceIndex].children[cityIndex];
+  columns[2] = city.children.map(item => item.name);
+
+};
+
+
+// 填充一级行业数据
+const fillIndustryData = () => {
+  columnsIndustry[0] = indestryData.map(item => item.name);
+};
+
+// 填充二级行业数据
+const fillIndustrySecondData = (industryIndex) => {
+  const industry = indestryData[industryIndex];
+  console.log(industry,'industry')
+  columnsIndustry[1] = industry.children.map(item => item.name);
+};
+
+// 更新 selectedRegion 的值
+const updateSelectedRegion = (provinceIndex, cityIndex, districtIndex) => {
+  const province = regionData[provinceIndex];
+  const city = province.children[cityIndex];
+  const district = city.children[districtIndex];
+  selectedRegion.province = province.name;
+  selectedRegion.provinceCode = province.code;
+  selectedRegion.city = city.name;
+  selectedRegion.cityCode = city.code;
+  selectedRegion.district = district ? district.name : null;
+  selectedRegion.districtCode = district ? district.code : null;
+  selectedRegion.provinceIndex = provinceIndex;
+  selectedRegion.cityIndex = cityIndex;
+  selectedRegion.districtIndex = districtIndex;
+};
+
+const updateSelectedIndustry = (industryIndex, industryCityIndex) => {
+
+	const firstIndustry = indestryData[industryIndex];
+	const secondIndustry = firstIndustry.children[industryCityIndex];
+	
+	selectedIndustry.industryIndex = industryIndex;
+	selectedIndustry.industry = columnsIndustry[0][industryIndex];
+	selectedIndustry.industryCode = firstIndustry.code;
+	selectedIndustry.industrySecond = columnsIndustry[1][industryCityIndex];
+	selectedIndustry.industrySecondCode = secondIndustry.code;
+	selectedIndustry.industrySecondIndex = industryCityIndex;
+}
+
+// 初始化时填充省级数据并选择默认项
+const initializePicker = () => {
+  fillProvinceData();
+  // 默认选择第一个省
+  const defaultProvinceIndex = 0;
+  const defaultCityIndex = 0;
+  const defaultDistrictIndex = 0;
+
+  const defaultIndustryIndex = 0;
+
+
+  // 填充市级数据
+  fillCityData(defaultProvinceIndex);
+  
+  // 填充区级数据
+  fillDistrictData(defaultProvinceIndex, defaultCityIndex);
+
+  fillIndustryData();
+  fillIndustrySecondData(0);
+
+  // 更新 selectedRegion
+  updateSelectedRegion(defaultProvinceIndex, defaultCityIndex, defaultDistrictIndex);
+  updateSelectedIndustry(defaultIndustryIndex, 0);
+  defaultCityArray.value = [0, 0, 0]
+};
+
+// 监听省市区选择的变化
+const changeHandler = (e) => {
+  const { columnIndex, index } = e;
+
+console.log(columnIndex, index,'111')
+  if (columnIndex === 0) {
+    // 更新市和区
+    fillCityData(index);
+    fillDistrictData(index, 0); // 默认选择市的第一个区
+    updateSelectedRegion(index, 0, 0);
+  } else if (columnIndex === 1) {
+    // 更新区
+    fillDistrictData(selectedRegion.provinceIndex, index);
+    updateSelectedRegion(selectedRegion.provinceIndex, index, 0);
+  } else if (columnIndex === 2) {
+    // 更新区选择
+    updateSelectedRegion(selectedRegion.provinceIndex, selectedRegion.cityIndex, index);
+  }
+};
+// 监听行业选择的变化
+const onIndustryChange = (e) => {
+  const { columnIndex, index } = e;
+
+	if(columnIndex === 0){
+	
+		fillIndustrySecondData(index);
+		updateSelectedIndustry(index, selectedIndustry.industrySecondIndex);
+	}
+	if(columnIndex === 1){
+		updateSelectedIndustry(selectedIndustry.industryIndex, index);
+		// fillIndustrySecondData(index);
+	}
+}
+
+
+// 处理确认选择的逻辑
+const confirm = (e) => {
+	
+	defaultCityArray.value = [selectedRegion.provinceIndex, selectedRegion.cityIndex, selectedRegion.districtIndex]
+	
+    realRegion.province = selectedRegion.province;
+    realRegion.city = selectedRegion.city;
+    realRegion.district = selectedRegion.district;
+    realRegion.provinceCode = selectedRegion.provinceCode;
+    realRegion.cityCode = selectedRegion.cityCode;
+    realRegion.districtCode = selectedRegion.districtCode;
+    realRegion.provinceIndex = selectedRegion.provinceIndex;
+    realRegion.cityIndex = selectedRegion.cityIndex;
+    realRegion.districtIndex = selectedRegion.districtIndex;
+	
+    // 获取选中地区的经纬度
+    const address = `${realRegion.province}${realRegion.city}${realRegion.district}`;
+    getLocationByAddress(address);
+    
+    show.value = false;
+}
+
+// 添加根据地址获取经纬度的函数
+const getLocationByAddress = (address) => {
+    uni.showLoading({
+        title: '定位中...'
+    });
+    
+    uni.request({
+        url: 'https://restapi.amap.com/v3/geocode/geo',
+        method: 'GET',
+        data: {
+            key: '7d6f9f3723fc6572aaf13328ba8a504e',
+            address: address,
+            city: realRegion.city
+        },
+        success: (res) => {
+            uni.hideLoading();
+            if (res.data.status === '1' && res.data.geocodes && res.data.geocodes[0]) {
+                const location = res.data.geocodes[0].location.split(',');
+                const latitude = parseFloat(location[1]);
+                const longitude = parseFloat(location[0]);
+                
+                // 更新地图状态
+                mapState.latitude = latitude;
+                mapState.longitude = longitude;
+                mapState.scale = adjustMapScale(Number(selectedDistance.value));
+                
+                // 更新圆形范围
+                mapState.circles = [{
+                    latitude: latitude,
+                    longitude: longitude,
+                    color: '#1989fa66',
+                    fillColor: '#1989fa22',
+                    radius: selectedDistance.value * 1000,
+                    strokeWidth: 2
+                }];
+                
+                // 更新标记点
+                mapState.markers = [{
+                    id: 0,
+                    latitude: latitude,
+                    longitude: longitude,
+                    iconPath: '/static/local.png',
+                    // #ifdef APP-PLUS
+                    anchor: {
+                        x: 0.5,
+                        y: 0.5
+                    },
+                    width: '20px',
+                    height: '20px',
+                    // #endif
+                    // #ifdef H5
+                    width: 20,
+                    height: 20,
+                    // #endif
+                    callout: {
+                        content: address,
+                        color: '#000000',
+                        fontSize: 14,
+                        borderRadius: 4,
+                        padding: 8,
+                        display: 'ALWAYS'
+                    }
+                }];
+                
+                // 更新当前地址
+                currentAddress.value = address;
+            } else {
+                uni.showToast({
+                    title: '获取位置失败',
+                    icon: 'none'
+                });
+            }
+        },
+        fail: (err) => {
+            uni.hideLoading();
+            console.error('获取位置失败:', err);
+            uni.showToast({
+                title: '获取位置失败',
+                icon: 'none'
+            });
+        }
+    });
+};
+
+// 初始化选择器
+initializePicker();
+
+
+const showPicker = () => {
+	show.value = true;
+}
+
+const cancel = () => {
+	show.value = false;
+}
+
+// 地图状态
+const mapState = reactive({
+	latitude: 39.909,
+	longitude: 116.397,
+	scale: 15,
+	markers: [],
+	circles: [{
+		latitude: 39.909,
+		longitude: 116.397,
+		color: '#1989fa66',  // 透明度从33改为66
+		fillColor: '#1989fa22', // 填充色从11改为22
+		radius: 2000,
+		strokeWidth: 2
+	}]
+})
+
+// 搜索相关的响应式变量
+const currentAddress = ref('')
+const distanceOptions = Array.from({length: 20}, (_, i) => (i + 1).toString())
+const selectedDistance = ref('2')
+const keyword = ref('')
+
+// 新增状态变量
+const collectedItems = ref([]) // 只保留采集到的详细信息
+
+// 根据搜索半径调整地图缩放级别
+const adjustMapScale = (radius) => {
+	// 根据半径大小动态调整放级别
+	if (radius <= 1) return 15;
+	if (radius <= 2) return 14;
+	if (radius <= 5) return 13;
+	if (radius <= 10) return 12;
+	return 11;
+}
+
+// 获取当前位置和地址
+const getCurrentLocation = () => {
+	uni.showLoading({
+		title: '定位中...'
+	})
+
+	uni.getLocation({
+		type: 'gcj02',
+		isHighAccuracy: true,
+		success: (res) => {
+			const latitude = res.latitude;
+			const longitude = res.longitude;
+
+			// 更新地图状态
+			mapState.latitude = latitude;
+			mapState.longitude = longitude;
+			mapState.scale = adjustMapScale(Number(selectedDistance.value));
+			
+			// 更新圆形范围
+			mapState.circles = [{
+				latitude: latitude,
+				longitude: longitude,
+				color: '#1989fa66',  // 透明度从33改为66
+				fillColor: '#1989fa22', // 填充色从11改为22
+				radius: selectedDistance.value * 1000,
+				strokeWidth: 2
+			}]
+			
+			// 添加当前位置标记
+			mapState.markers = [{
+				id: 0,
+				latitude: latitude,
+				longitude: longitude,
+				iconPath: '/static/local.png',
+				// #ifdef H5
+				width: 20,
+				height: 20,
+				// #endif
+				// #ifdef APP-PLUS
+				anchor: {
+					x: 0.5,
+					y: 0.5
+				},
+				width: '20px',
+				height: '20px',
+				// #endif
+				callout: {
+					content: '当前位置',
+					color: '#000000',
+					fontSize: 14,
+					borderRadius: 4,
+					padding: 8,
+					display: 'ALWAYS'
+				}
+			}]
+
+			// 获取详细地址
+			uni.request({
+				url: 'https://restapi.amap.com/v3/geocode/regeo',
+				method: 'GET',
+				data: {
+					key: '7d6f9f3723fc6572aaf13328ba8a504e',
+					location: `${longitude},${latitude}`,
+					extensions: 'all',
+					batch: false,
+					roadlevel: 1,
+					output: 'json'
+				},
+				success: (addressRes) => {
+                    console.log(addressRes,'0000');
+					uni.hideLoading()
+					if (addressRes.data.status === '1' && addressRes.data.regeocode) {
+						currentAddress.value = addressRes.data.regeocode.formatted_address;		
+                        console.log(addressRes.data.regeocode.formatted_address,'当前位置123');
+                        realRegion.province = addressRes.data.regeocode.addressComponent.province;
+                        realRegion.city = addressRes.data.regeocode.addressComponent.city;
+                        realRegion.district = addressRes.data.regeocode.addressComponent.district;
+                        realRegion.provinceCode = addressRes.data.regeocode.addressComponent.provincecode;
+                        realRegion.cityCode = addressRes.data.regeocode.addressComponent.cityCode;
+                        realRegion.districtCode = addressRes.data.regeocode.addressComponent.adcode;
+					} else {
+						currentAddress.value = `${latitude},${longitude}`;
+					}
+				},
+				fail: (error) => {
+					uni.hideLoading()
+					console.error('获取地址失败:', error);
+					currentAddress.value = `${latitude},${longitude}`;
+				}
+			});
+		},
+		fail: (err) => {
+			uni.hideLoading()
+			console.error('获取位置失败:', err);
+			uni.showToast({
+				title: '获取位置失败',
+				icon: 'none'
+			});
+		}
+	});
+}
+
+// 初始化数据
+const initData = () => {
+	// 初始化地图状态
+	mapState.latitude = 39.909
+	mapState.longitude = 116.397
+	mapState.scale = adjustMapScale(Number(selectedDistance.value))
+	mapState.circles = [{
+		latitude: 39.909,
+		longitude: 116.397,
+		color: '#1989fa66',  // 透明度从33改为66
+		fillColor: '#1989fa22', // 填充色从11改为22
+		radius: selectedDistance.value * 1000,
+		strokeWidth: 2
+	}]
+	
+	// 获取当前位置
+	getCurrentLocation()
+}
+
+// 显示位置选择器
+const showLocationPicker = () => {
+	uni.chooseLocation({
+		success: (res) => {
+
+			currentAddress.value = res.address
+			mapState.latitude = res.latitude
+			mapState.longitude = res.longitude
+			mapState.scale = adjustMapScale(Number(selectedDistance.value));
+			
+			// 更新圆形范围的位置
+			mapState.circles = [{
+				latitude: res.latitude,
+				longitude: res.longitude,
+				color: '#1989fa66',  // 透明度从33改为66
+				fillColor: '#1989fa22', // 填充色从11改为22
+				radius: selectedDistance.value * 1000,
+				strokeWidth: 2
+			}]
+
+			// 添加新的位置标记
+			mapState.markers = [{
+				id: 0,
+				latitude: res.latitude,
+				longitude: res.longitude,
+				iconPath: '/static/local.png',
+				width: 32,
+				height: 32,
+				callout: {
+					content: res.name || res.address,
+					color: '#000000',
+					fontSize: 14,
+					borderRadius: 4,
+					padding: 8,
+					display: 'ALWAYS'
+				}
+			}]
+		},
+		fail: (err) => {
+			console.error('选择位置失败:', err);
+		}
+	})
+}
+
+// 范围选择改变
+const onDistanceChange = (e) => {
+	selectedDistance.value = distanceOptions[e.detail.value]
+	mapState.scale = adjustMapScale(Number(selectedDistance.value));
+	
+	// 更新圆形范围
+	mapState.circles = [{
+		latitude: mapState.latitude,
+		longitude: mapState.longitude,
+		color: '#1989fa66',  // 透明度从33改为66
+		fillColor: '#1989fa22', // 填充色从11改为22
+		radius: selectedDistance.value * 1000,
+		strokeWidth: 2
+	}]
+}
+
+// 修改 searchNearbyPOI 函数
+const searchNearbyPOI = async () => {
+	if (!realIndustry.industrySecondCode) {
+		uni.showToast({
+			title: '请选择行业',
+			icon: 'none'
+		})
+		return
+	}
+
+	uni.showLoading({
+		title: '搜索中...'
+	})
+
+	try {
+			let currentPage = 1
+			let allData = []
+			let hasMoreData = true
+			
+			// 循环获取所有页面的数据
+			while (hasMoreData) {
+      
+				const pageData = await searchPOIByPage(currentPage)
+				// 如果当前页有数据，添加到总数组中
+				if (pageData && pageData.length > 0) {
+					allData = [...allData, ...pageData]
+					
+					// 如果返回的数据少于50条，说明没有更多数据了
+					if (pageData.length < 50) {
+						hasMoreData = false
+					} else {
+						currentPage++
+					}
+				} else {
+					hasMoreData = false
+				}
+			}
+			
+			// 更新收集到的数据
+			collectedItems.value = allData
+	
+  
+    	// 发起接口
+	 const data = {
+		collect_type: "0",
+    key_words:realIndustry.industrySecond,
+    collect_address:`${realRegion.province}-${realRegion.city}-${realRegion.district}`,
+		collect_time: formatDate(new Date()),
+		industry_type:realIndustry.industrySecondCode,
+    industry_name:`${realIndustry.industry}-${realIndustry.industrySecond}`,
+		collection_result: collectedItems.value,
+		collect_location: `${mapState.latitude},${mapState.longitude}`,
+		time: formatDate(new Date())
+	 }
+   console.log("data1111111",data)
+
+// uni.request({
+//     url: 'http://chat.ihealer.cn:9999/comboost/api/wechat/add_wx_records',
+//     method: 'POST',
+//     header: {
+//         'Content-Type': 'application/json',
+//         'token': uni.getStorageSync('token')
+//     },
+//     data: data
+// }).then(res => {
+// 	if (res.data.code == '401') {
+// 		    uni.showToast({
+// 		        title: '请求失效',
+// 		        duration: 2000,
+//             icon: 'none',
+// 		    })
+// 		    setTimeout(() => {
+// 		        uni.reLaunch({
+// 		            url: '/pages/login/index'
+// 		        })
+// 		    }, 2000)
+// 		}
+
+//     collect_batch_id.value = res.data.data.collect_batch_id
+//     console.log(collect_batch_id.value,'collect_batch_id')
+// }).catch(err => {
+  
+//     console.error('请求失败:', err)
+//     uni.showToast({
+//         title: '保存失败',
+//         icon: 'none'
+//     })
+// })
+
+		// 更新地图标记
+		if (collectedItems.value && collectedItems.value.length > 0) {
+			updateMapMarkers(collectedItems.value)
+			// 显示采集完成的提示
+			modalContent.value = `采集完成，共采集到 ${collectedItems.value.length} 条数据`
+			showModal.value = true
+		} else {
+			uni.showToast({
+				title: '未找到相关位置',
+				icon: 'none'
+			})
+		}
+		
+		// 保存到历史记录
+		const saveToHistory = () => {
+			const history = uni.getStorageSync('searchHistory') || []
+			const newRecord = {
+				address: realRegion.province + realRegion.city + realRegion.district,
+				keyword: keyword.value,
+				count: collectedItems.value.length,
+				items: collectedItems.value,
+				timestamp: Date.now()
+			}
+			
+			// 添加新记录到开头
+			history.unshift(newRecord)
+			
+			// 最多保存20条记录
+			if (history.length > 20) {
+				history.pop()
+			}
+			
+			uni.setStorageSync('searchHistory', history)
+		}
+
+		// 在采集成功后调用
+		saveToHistory()
+		
+	} catch (error) {
+		console.error('搜索失败:', error)
+		uni.showToast({
+			title: '搜索失败',
+			icon: 'none'
+		})
+	} finally {
+		uni.hideLoading()
+	}
+}
+
+// 新增按页搜索的辅助函数
+const searchPOIByPage = (page) => {
+	return new Promise((resolve, reject) => {
+		uni.request({
+			url: 'https://restapi.amap.com/v3/place/text',
+			method: 'GET',
+			data: {
+				key: '7d6f9f3723fc6572aaf13328ba8a504e',
+				city: realRegion.districtCode,
+				types: realIndustry.industrySecondCode,
+				citylimit: true,
+				offset: 50, // 每页记录数
+				page: page,
+				extensions: 'all'
+			},
+			success: (res) => {
+				if (res.data.status === '1' && res.data.pois) {
+					const pois = res.data.pois.map(poi => ({
+						id: poi.id,
+						name: poi.name,
+						address: poi.address,
+						tel: poi.tel || '暂无电话',
+						location: poi.location,
+						type: poi.type,
+						distance: poi.distance,
+						photos: poi?.photos[0]?.url || '',
+						pcode: poi.pcode,
+						adcode: poi.adcode,
+						pname: poi.pname,
+						adname: poi.adname,
+						citycode: poi.citycode,
+						bzi_type: poi.bzi_type,
+					}))
+					resolve(pois)
+				} else {
+					resolve([])
+				}
+			},
+			fail: (err) => {
+				reject(err)
+			}
+		})
+	})
+}
+
+// 更新地图标记的辅助函数也需要相应修改
+const updateMapMarkers = (pois) => {
+	mapState.markers = [
+		// 保持当前位置的标记
+		{
+			id: 'current',
+			latitude: mapState.latitude,
+			longitude: mapState.longitude,
+			iconPath: '/static/local.png',
+			// #ifdef H5
+			width: 20,
+			height: 20,
+			// #endif
+			// #ifdef APP-PLUS
+			anchor: {
+				x: 0.5,
+				y: 0.5
+			},
+			width: '20px',
+			height: '20px',
+			// #endif
+			callout: {
+				content: '当前位置',
+				color: '#000000',
+				fontSize: 12,
+				borderRadius: 4,
+				padding: 8,
+				display: 'ALWAYS'
+			}
+		},
+		// 添加搜索结果的标记，默认不显示信息窗口
+		...pois.map((poi, index) => {
+			const [lng, lat] = poi.location.split(',')
+			return {
+				id: index + 1, // id从1开始，因为0是当前位置
+				latitude: lat,
+				longitude: lng,
+				iconPath: '/static/marker.png',
+				// #ifdef H5
+				width: 20,
+				height: 20,
+				// #endif
+				// #ifdef APP-PLUS
+				anchor: {
+					x: 0.5,
+					y: 0.5
+				},
+				width: '20px',
+				height: '20px',
+				// #endif
+				callout: {
+					content: `${poi.name}\n${poi.tel || '暂无电话'}`,
+					color: '#000000',
+					fontSize: 14,
+					borderRadius: 4,
+					padding: 8,
+					display: 'BYCLICK' // 改为点击时显示
+				}
+			}
+		})
+	]
+}
+
+// 添加地图标记点击事件处理
+const onMarkerTap = (e) => {
+    const markerId = e.detail.markerId
+    // 如果点击的是当前位置标记，不做处理
+    if (markerId === 'current') return
+    
+    // 找到对应的数据
+    const poi = collectedItems.value[markerId - 1]
+    if (poi) {
+        // 可以在这里添加更多点击后的处理逻辑
+        console.log('点击的POI:', poi)
+    }
+}
+
+// 修改开始采集按钮的处理函数
+const startCollect = () => {
+	searchNearbyPOI()
+}
+
+// // 跳转到列表页面
+
+
+// 页面加载时初始化
+onMounted(() => {
+	initData()
+	const pages = getCurrentPages()
+    const currentPage = pages[pages.length - 1]
+    const options = currentPage.$page?.options
+    
+    // 如果有关键词参数，自动填充并开始采集
+    if (options?.keyword) {
+        keyword.value = decodeURIComponent(options.keyword) // 解码 URL 参数
+		console.log(keyword.value,'0000');
+
+        // 等待地图和定位初始化完成后再开始采集
+        setTimeout(() => {
+            startCollect()
+        }, 1000) // 延迟1秒执行，确保地图已完全加载
+    }
+
+})
+
+// 在 script setup 部分添加 modal 相关的响应式变量
+const showModal = ref(false)
+const modalContent = ref('')
+
+// 添加 modal 关闭的处理函数
+const closeModal = () => {
+    showModal.value = false
+    // goToList() // 如果需要在关闭弹窗后跳转到列表页，可以取消注释这行
+}
+
+// 在搜索成功后添加
+uni.setStorageSync('searchKeyword', keyword.value)
+
+// 在 script setup 部分添加行业数据
+const industries = [[],[]]
+
+// 添加行业选择相关的响应式变量
+const showIndustryPicker = ref(false)
+
+const selectedIndustryCode = ref('')
+
+// 添加行业选择处理函数
+
+
+const onIndustryCancel = () => {
+  showIndustryPicker.value = false
+}
+
+// 获取状态栏高度
+const statusBarHeight = ref(20)
+
+// 处理返回按钮点击
+const onBackClick = () => {
+    uni.navigateBack({
+        delta: 1
+    })
+}
+
+// 处理记录按钮点击
+const onRecordClick = () => {
+    uni.navigateTo({
+        url: '/pages/task/history'
+    })
+}
+</script>
+
+<style>
+/* nvue页面只支持flex布局 */
+.container {
+  flex: 1;
+	flex-direction: column;
+	background-color: #f0f2f5;
+}
+
+.search-area {
+  background-image: linear-gradient(to bottom, #ffffff, #f8f9fc);
+	padding: 20rpx;
+	margin: 20rpx;
+	border-radius: 16rpx;
+}
+
+.search-item {
+  margin-bottom: 16rpx;
+}
+
+.search-item:last-child {
+    margin-bottom: 0;
+}   
+
+.input-box {
+  height: 80rpx;
+	background-color: rgba(25, 137, 250, 0.05);
+	border-width: 2rpx;
+	border-style: solid;
+	border-color: rgba(25, 137, 250, 0.1);
+	border-radius: 12rpx;
+	padding-left: 24rpx;
+	padding-right: 24rpx;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+}
+
+/* 文字颜色和大小设置 */
+.input-box-text {
+    color: #333333;
+    font-size: 14px;
+}
+
+.map-container {
+  flex: 1;
+	margin: 0 20rpx 20rpx;
+	border-radius: 16rpx;
+	position: relative;
+}
+
+.map {
+	flex: 1;
+	width: 750rpx;
+	border-radius: 16rpx;
+
+}
+
+.footer {
+    padding: 10px;
+    flex-direction: column;
+}
+
+.collect-btn {
+    height: 44px;
+    line-height: 44px;
+    background-color: #1989fa;
+    border-radius: 22px;
+    /* 文字样式 */
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 500;
+    text-align: center;
+}
+
+/* 输入框特定样式 */
+.search-item-input {
+    flex: 1;
+    height: 45px;
+    font-size: 16px;
+    color: #333333;
+}
+
+/* placeholder样式 */
+
+/* 省市区选择器容器 */
+.picker-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: #ffffff;
+}
+
+/* 弹窗样式调整 */
+.modal-content {
+    padding: 15px;
+    align-items: center;
+}
+
+.modal-text {
+    font-size: 16px;
+    color: #333333;
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.nav-bar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #eee;
+}
+
+.nav-content {
+    height: 52px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px;
+}
+
+.nav-left {
+    width: 44px;
+    align-items: flex-start;
+    padding-top: 4px;
+}
+
+.nav-title {
+    flex: 1;
+    text-align: center;
+    font-size: 16px;
+    color: #000000;
+    font-weight: 500;
+}
+
+.nav-right {
+    width: 44px;
+    align-items: flex-end;
+    padding-top: 4px;
+}
+</style>

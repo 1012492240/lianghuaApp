@@ -1,0 +1,69 @@
+# # General
+.DS_Store
+node_modules/
+# dist/
+hbuilderx/
+unpackage/
+.history/
+node_modules/cache/
+node_modules/dist/
+
+# # Logs
+# logs
+# *.log
+# npm-debug.log*
+# yarn-debug.log*
+# yarn-error.log*
+# pnpm-debug.log*
+
+# # Editor directories and files
+# .idea
+# .vscode
+# *.suo
+# *.ntvs*
+# *.njsproj
+# *.sln
+# *.sw?
+
+# # Local env files
+# .env.local
+# .env.*.local
+
+# # Package manager
+package-lock.json
+yarn.lock
+# pnpm-lock.yaml
+
+# # HBuilderX
+# .hbuilderx/
+# .project
+
+# # uni-app
+# unpackage/
+# .uni-app/
+# .uni/
+
+# # Production
+# /dist/
+# /build/
+
+# # Optional npm cache directory
+# .npm
+
+# # Optional eslint cache
+# .eslintcache
+
+# # Optional stylelint cache
+# .stylelintcache
+
+# # Temporary files
+# *.tmp
+# *.temp
+# .temp/
+# .tmp/
+
+# # System Files
+# Thumbs.db
+# ehthumbs.db
+# Desktop.ini
+# $RECYCLE.BIN/ 

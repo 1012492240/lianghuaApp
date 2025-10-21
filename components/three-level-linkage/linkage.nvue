@@ -1,0 +1,429 @@
+<template>
+	<view class="linkage" v-if="showPopup" @touchmove.stop.prevent="clear">
+		<!-- 遮罩层 -->
+		<view class="linkage-mask" @touchmove.stop.prevent="clear" v-if="maskClick" :class="[ani+'-mask', animation ? 'mask-ani' : '']" :style="{
+					'background-color': maskBgColor
+				}"
+		 @tap="hideMask(true)"></view>
+
+		<view class="linkage-content linkage--fixed" :class="[type,ani+'-content', animation ? 'content-ani' : '']">
+			<view class="linkage__header">
+				<view class="linkage__header-btn-box" @click="pickerCancel">
+					<text class="linkage__header-text">取消</text>
+				</view>
+				<view class="linkage__header-btn-box" @click="pickerConfirm">
+					<text class="linkage__header-text" :style="{color:themeColor}">确定</text>
+				</view>
+			</view>
+			<view class="linkage__box">
+				<picker-view indicator-style="height: 70rpx;" class="linkage-view" :value="pickerValue" @change="pickerChange">
+
+					<picker-view-column>
+						<!-- #ifndef APP-NVUE -->
+						<view class="picker-item" v-for="(item,index) in firstLevel" :key="index">{{item.name}}</view>
+						<!-- #endif -->
+						<!-- #ifdef APP-NVUE -->
+						<text class="picker-item" v-for="(item,index) in firstLevel" :key="index">{{item.name}}</text>
+						<!-- #endif -->
+					</picker-view-column>
+					<picker-view-column v-if="secondShow">
+						<!-- #ifndef APP-NVUE -->
+						<view class="picker-item" v-for="(item,index) in secondLevel" :key="index">{{item.name}}</view>
+						<!-- #endif -->
+						<!-- #ifdef APP-NVUE -->
+						<text class="picker-item" v-for="(item,index) in secondLevel" :key="index">{{item.name}}</text>
+						<!-- #endif -->
+
+					</picker-view-column>
+					<picker-view-column v-if="thirdShow">
+						<!-- #ifndef APP-NVUE -->
+						<view class="picker-item" v-for="(item,index) in thirdLevel" :key="index">{{item.name}}</view>
+						<!-- #endif -->
+						<!-- #ifdef APP-NVUE -->
+						<text class="picker-item" v-for="(item,index) in thirdLevel" :key="index">{{item.name}}</text>
+						<!-- #endif -->
+
+					</picker-view-column>
+
+				</picker-view>
+			</view>
+		</view>
+
+	</view>
+</template>
+
+<script setup>
+import { ref, watch, nextTick } from 'vue';
+
+const props = defineProps({
+	allData: {
+		type: Array,
+		default: () => []
+	},
+	animation: {
+		type: Boolean,
+		default: true
+	},
+	type: {
+		type: String,
+		default: 'bottom'
+	},
+	maskClick: {
+		type: Boolean,
+		default: true
+	},
+	show: {
+		type: Boolean,
+		default: true
+	},
+	maskBgColor: {
+		type: String,
+		default: 'rgba(0, 0, 0, 0.4)'
+	},
+	themeColor: {
+		type: String,
+		default: ''
+	},
+	pickerValueDefault: {
+		type: Array,
+		default: () => [0, 0, 0]
+	}
+});
+
+const emit = defineEmits(['onChange', 'onCancel', 'onConfirm']);
+
+// 响应式数据
+const secondShow = ref(false);
+const thirdShow = ref(false);
+const ani = ref('');
+const showPopup = ref(false);
+const pickerValue = ref([0, 0, 0]);
+const firstLevel = ref([]);
+const secondLevel = ref([]);
+const thirdLevel = ref([]);
+
+const emptyList = [{
+	id: "",
+	name: "",
+	code: "",
+	children: []
+}];
+
+// 方法
+const handPickValueDefault = () => {
+	if (props.pickerValueDefault !== [0, 0, 0]) {
+		if (props.pickerValueDefault[0] > props.allData.length - 1) {
+			props.pickerValueDefault[0] = props.allData.length - 1;
+		}
+		if (secondShow.value && props.pickerValueDefault[1] > props.allData[props.pickerValueDefault[0]].children.length - 1) {
+			props.pickerValueDefault[1] = props.allData[props.pickerValueDefault[0]].children.length - 1;
+		}
+		if (thirdShow.value &&
+			props.pickerValueDefault[2] > props.allData[props.pickerValueDefault[0]].children[props.pickerValueDefault[1]].children.length - 1) {
+			props.pickerValueDefault[2] = props.allData[props.pickerValueDefault[0]].children[props.pickerValueDefault[1]].children.length - 1;
+		}
+	}
+};
+
+const init = () => {
+	handPickValueDefault();
+	firstLevel.value = props.allData;
+	
+	secondShow.value = props.pickerValueDefault[1] >= 0;
+	thirdShow.value = props.pickerValueDefault[2] >= 0;
+	
+	if(secondShow.value){
+		secondLevel.value = firstLevel.value[props.pickerValueDefault[0]].children.length == 0
+			? emptyList : firstLevel.value[props.pickerValueDefault[0]].children;
+	}else{
+		thirdShow.value = false;
+	}
+	
+	if(thirdShow.value){
+		thirdLevel.value = secondLevel.value[props.pickerValueDefault[1]].children.length == 0
+			? emptyList : secondLevel.value[props.pickerValueDefault[1]].children;
+	}
+	
+	pickerValue.value = props.pickerValueDefault;
+};
+
+const _getLabel = () => {
+	let pcikerLabel = firstLevel.value[pickerValue.value[0]].name;
+	
+	if(secondShow.value){
+		pcikerLabel = pcikerLabel + '-' + secondLevel.value[pickerValue.value[1]].name;
+	}
+	
+	if(thirdShow.value){
+		pcikerLabel = pcikerLabel + '-' + thirdLevel.value[pickerValue.value[2]].name;
+	}
+	
+	return pcikerLabel;
+};
+
+const _$emit = (emitName) => {
+	const firstPick = {
+		id: _getFirst().id,
+		name: _getFirst().name,
+		code: _getFirst().code
+	};
+	
+	let secondPick = {};
+	let thirdPick = {};
+	
+	if(secondShow.value){
+		secondPick = {
+			id: _getSecond().id,
+			name: _getSecond().name,
+			code: _getSecond().code
+		};
+	}
+	
+	if(thirdShow.value){
+		thirdPick = {
+			id: _getThird().id,
+			name: _getThird().name,
+			code: _getThird().code
+		};
+	}
+	
+	const pickObj = {
+		name: _getLabel(),
+		value: pickerValue.value,
+		secondPick,
+		thirdPick,
+		firstPick
+	};
+	
+	emit(emitName, pickObj);
+};
+
+const _getFirst = () => firstLevel.value[pickerValue.value[0]];
+const _getSecond = () => secondShow.value ? secondLevel.value[pickerValue.value[1]] : emptyList;
+const _getThird = () => thirdShow.value ? thirdLevel.value[pickerValue.value[2]] : emptyList;
+
+const pickerChange = (e) => {
+	let changePickerValue = e.detail.value;
+	if (pickerValue.value[0] !== changePickerValue[0]) {
+		if(secondShow.value){
+			secondLevel.value = firstLevel.value[changePickerValue[0]].children.length == 0 
+				? emptyList : firstLevel.value[changePickerValue[0]].children;
+			changePickerValue[1] = 0;
+		}
+		
+		if(thirdShow.value){
+			thirdLevel.value = secondLevel.value[0].children.length == 0 
+				? emptyList : secondLevel.value[0].children;
+			changePickerValue[2] = 0;
+		}
+	} else if (pickerValue.value[1] !== changePickerValue[1]) {
+		if(thirdShow.value){
+			thirdLevel.value = secondLevel.value[changePickerValue[1]].children == 0 
+				? emptyList : secondLevel.value[changePickerValue[1]].children;
+			changePickerValue[2] = 0;
+		}
+	}
+	pickerValue.value = changePickerValue;
+	_$emit('onChange');
+};
+
+const open = () => {
+	showPopup.value = true;
+	nextTick(() => {
+		setTimeout(() => {
+			ani.value = 'linkage-c-' + props.type;
+		}, 100);
+	});
+};
+
+const close = (type) => {
+	if (!props.maskClick && type) return;
+	ani.value = '';
+	nextTick(() => {
+		setTimeout(() => {
+			showPopup.value = false;
+		}, 300);
+	});
+};
+
+const hideMask = () => {
+	_$emit('onCancel');
+	close();
+};
+
+const pickerCancel = () => {
+	_$emit('onCancel');
+	close();
+};
+
+const pickerConfirm = () => {
+	_$emit('onConfirm');
+	close();
+};
+
+// 监听
+watch(() => props.show, (newValue) => {
+	if (newValue) {
+		open();
+	} else {
+		close();
+	}
+});
+
+watch(() => props.pickerValueDefault, () => {
+	init();
+});
+
+// 初始化
+init();
+
+defineExpose({
+	open,
+	close,
+	init
+});
+</script>
+
+<style lang="scss" scoped>
+	.linkage {
+		/* #ifndef APP-NVUE */
+		display: flex;
+		/* #endif */
+		flex-direction: column;
+	}
+
+	.linkage-mask {
+		position: fixed;
+		bottom: 0;
+		top: 0;
+		left: 0;
+		right: 0;
+
+		transition-property: opacity;
+		transition-duration: 0.3s;
+		opacity: 0;
+		/* #ifndef APP-NVUE */
+		z-index: 99;
+		/* #endif */
+	}
+
+
+	.mask-ani {
+		transition-property: opacity;
+		transition-duration: 0.2s;
+	}
+
+	.linkage-c-bottom-mask {
+		opacity: 1;
+	}
+
+	.linkage-c-center-mask {
+		opacity: 1;
+	}
+
+	.linkage--fixed {
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		transition-property: transform;
+		transition-duration: 0.3s;
+		transform: translateY(460rpx);
+		/* #ifndef APP-NVUE */
+		z-index: 99;
+		/* #endif */
+	}
+
+	.linkage-content {
+		background-color: #FFFFFF;
+	}
+
+	.linkage-c-content-bottom {
+		bottom: 0;
+		left: 0;
+		right: 0;
+		transform: translateY(500rpx);
+	}
+
+	.content-ani {
+		transition-property: transform, opacity;
+		transition-duration: 0.2s;
+	}
+
+	.linkage-c-bottom-content {
+		transform: translateY(0);
+	}
+
+	.linkage-c-center-content {
+		transform: scale(1);
+		opacity: 1;
+	}
+
+	.linkage__header {
+		position: relative;
+		/* #ifndef APP-NVUE */
+		display: flex;
+		/* #endif */
+		flex-direction: row;
+		flex-wrap: nowrap;
+		justify-content: space-between;
+		border-bottom-color: #f2f2f2;
+		border-bottom-style: solid;
+		border-bottom-width: 1rpx;
+	}
+
+	.linkage--fixed-top {
+		/* #ifndef APP-NVUE */
+		display: flex;
+		/* #endif */
+		flex-direction: row;
+		justify-content: space-between;
+		border-top-color: $uni-border-color;
+		border-top-style: solid;
+		border-top-width: 1rpx;
+	}
+
+	.linkage__header-btn-box {
+		/* #ifndef APP-NVUE */
+		display: flex;
+		/* #endif */
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		height: 70rpx;
+	}
+
+	.linkage__header-text {
+		text-align: center;
+		font-size: $uni-font-size-base;
+		color: #1aad19;
+		line-height: 70rpx;
+		padding-left: 40rpx;
+		padding-right: 40rpx;
+	}
+
+	.linkage__box {
+		position: relative;
+	}
+
+	.linkage-view {
+		position: relative;
+		bottom: 0;
+		left: 0;
+		/* #ifndef APP-NVUE */
+		width: 100%;
+		/* #endif */
+		/* #ifdef APP-NVUE */
+		width: 750rpx;
+		/* #endif */
+		height: 408rpx;
+		background-color: rgba(255, 255, 255, 1);
+	}
+
+	.picker-item {
+		text-align: center;
+		line-height: 70rpx;
+		text-overflow: ellipsis;
+		font-size: 28rpx;
+	}
+</style>

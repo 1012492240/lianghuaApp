@@ -1,0 +1,755 @@
+<template>
+	<view class="container">
+		<!-- 自定义导航栏 -->
+		<view class="nav-bar" :style="{ paddingTop: statusBarHeight+10 + 'px' }">
+			<view class="nav-content">
+				<!-- 左侧返回按钮 -->
+				<view class="nav-left" @click="onBackClick">
+					<u-icon name="arrow-left" size="20" color="#333333"></u-icon>
+				</view>
+				<!-- 居中标题 -->
+				<text class="nav-title">附近获客</text>
+				<!-- 右侧记录按钮 -->
+				<view class="nav-right" @click="onRecordClick">
+					<u-icon name="file-text" size="22" color="#333333"></u-icon>
+				</view>
+			</view>
+		</view>
+		
+		<!-- 搜索条件区域 -->
+		
+		<view class="search-area">
+			<!-- 添加 up-modal 组件 -->
+		<up-modal
+			:show="showModal"
+			:content="modalContent" 
+			showCancelButton
+			@confirm="handleModalConfirm"
+			@cancel="handleModalCancel"
+			confirmText="查看列表"
+			cancelText="确定"
+		></up-modal>
+			<!-- 当前位置选择 -->
+			<view class="search-item" >
+				<view class="input-box "  @tap="showLocationPicker">
+					<text style="" class="location-text" >{{currentAddress || '定位中...'}}</text>
+					<text class="arrow">›</text>
+				</view>
+			</view>
+			
+			<!-- 搜索范围选择 -->
+			<view class="search-item">
+				<picker class="picker" :range="distanceOptions" @change="onDistanceChange">
+					<view class="input-box" >
+						<text  style="color:#333333;font-size: 14px;">{{selectedDistance}}km</text>
+						<text class="arrow">›</text>
+					</view>
+				</picker>
+			</view>
+			
+			<!-- 关键词搜索 -->
+			<view class="search-item">
+				<input 
+					class="input-box"
+                    style="color: black;font-size: 14px;"
+					type="text"
+					v-model="keyword"
+					placeholder="请输入关键词"
+					placeholder-class="placeholder"
+				/>
+			</view>
+		</view>
+		
+		<!-- 地图区域 -->
+		<view class="map-container">
+			<map 
+				id="map" 
+				class="map"
+				:latitude="mapState.latitude"
+				:longitude="mapState.longitude"
+				:markers="mapState.markers"
+				:scale="mapState.scale"
+				:circles="mapState.circles"
+				show-location
+				@markertap="onMarkerTap"
+			></map>
+		</view>
+		
+		<!-- 底部按钮 -->
+		<view class="footer">
+			<button class="collect-btn" style="color:" @tap="startCollect">
+                <text style="color:white;font-size: 16px;">开始采集</text>
+             
+            </button>
+		</view>
+		
+	
+	</view>
+</template>
+
+<script setup>
+import { reactive, ref, onMounted } from 'vue'
+import {onLoad,onShow,onHide,onUnload} from "@dcloudio/uni-app";
+import { formatDate } from '@/utils/date'
+const collect_batch_id = ref('')
+// 地图状态
+const mapState = reactive({
+	latitude: 39.909,
+	longitude: 116.397,
+	scale: 15,
+	markers: [],
+	circles: [{
+		latitude: 39.909,
+		longitude: 116.397,
+		color: '#1989fa66',  // 透明度从33改为66
+		fillColor: '#1989fa22', // 填充色从11改为22
+		radius: 2000,
+		strokeWidth: 2
+	}]
+})
+
+// 搜索相关的响应式变量
+const currentAddress = ref('')
+const distanceOptions = Array.from({length: 10}, (_, i) => (i + 1).toString())
+const selectedDistance = ref('2')
+const keyword = ref('')
+
+// 新增状态变量
+const collectedItems = ref([]) // 只保留采集到的详细信息
+
+// 根据搜索半径调整地图缩放级别
+const adjustMapScale = (radius) => {
+	// 根据半径大小动态调整放级别
+	if (radius <= 1) return 15;
+	if (radius <= 2) return 14;
+	if (radius <= 5) return 13;
+	if (radius <= 10) return 12;
+	return 11;
+}
+
+// 获取当前位置和地址
+const getCurrentLocation = () => {
+
+	uni.showLoading({
+		title: '定位中...'
+	})
+
+	uni.getLocation({
+		type: 'gcj02',
+		isHighAccuracy: true,
+		success: (res) => {
+				const latitude = res.latitude;
+				const longitude = res.longitude;
+			
+			// 更新地图状态
+			mapState.latitude = latitude;
+			mapState.longitude = longitude;
+			mapState.scale = adjustMapScale(Number(selectedDistance.value));
+			console.log('8888888',mapState,latitude,)
+			try{
+			// 更新圆形范围
+			mapState.circles = [{
+				latitude: latitude,
+				longitude: longitude,
+				color: '#1989fa66',  // 透明度从33改为66
+				fillColor: '#1989fa22', // 填充色从11改为22
+				radius: selectedDistance.value * 1000,
+				strokeWidth: 2
+			}]
+			
+
+			// 添加当前位置标记
+		mapState.markers = [{
+				id: 0,
+				latitude: latitude,
+				longitude: longitude,
+				iconPath: '/static/local.png',
+				// #ifdef H5
+				width: 20,
+				height: 20,
+				// #endif
+				// #ifdef APP-PLUS
+				anchor: {
+					x: 0.5,
+					y: 0.5
+				},
+				width: '20px',
+				height: '20px',
+				// #endif
+				callout: {
+					content: '当前位置',
+					color: '#000000',
+					fontSize: 14,
+					borderRadius: 4,
+					padding: 8,
+					display: 'ALWAYS'
+				}
+			}]
+
+		    }catch(error){
+				console.log('获取位置失败:', error);
+			}
+	
+			// 获取详细地址
+			uni.request({
+				url: 'https://restapi.amap.com/v3/geocode/regeo',
+				method: 'GET',
+				data: {
+					key: '7d6f9f3723fc6572aaf13328ba8a504e',
+					location: `${longitude},${latitude}`,
+					extensions: 'all',
+					batch: false,
+					roadlevel: 1,
+					output: 'json'
+				},
+				success: (addressRes) => {
+					uni.hideLoading()
+					if (addressRes.data.status === '1' && addressRes.data.regeocode) {
+						currentAddress.value = addressRes.data.regeocode.formatted_address;
+					} else {
+						currentAddress.value = `${latitude},${longitude}`;
+					}
+				},
+				fail: (error) => {
+					uni.hideLoading()
+					console.error('获取地址失败:', error);
+					currentAddress.value = `${latitude},${longitude}`;
+				}
+			});
+		},
+		fail: (err) => {
+			uni.hideLoading()
+			console.error('获取位置失败:', err);
+			uni.showToast({
+				title: '获取位置失败',
+				icon: 'none'
+			});
+		}
+	});
+}
+
+// 初始化数据
+const initData = () => {
+	// 初始化地图状态
+	mapState.latitude = 39.909
+	mapState.longitude = 116.397
+	mapState.scale = adjustMapScale(Number(selectedDistance.value))
+	mapState.circles = [{
+		latitude: 39.909,
+		longitude: 116.397,
+		color: '#1989fa66',  // 透明度从33改为66
+		fillColor: '#1989fa22', // 填充色从11改为22
+		radius: selectedDistance.value * 1000,
+		strokeWidth: 2
+	}]
+	
+	// 获取当前位置
+	getCurrentLocation()
+}
+
+// 显示位置选择器
+const showLocationPicker = () => {
+	uni.chooseLocation({
+		success: (res) => {
+
+			currentAddress.value = res.address
+			mapState.latitude = res.latitude
+			mapState.longitude = res.longitude
+			mapState.scale = adjustMapScale(Number(selectedDistance.value));
+			
+			// 更新圆形范围的位置
+			mapState.circles = [{
+				latitude: res.latitude,
+				longitude: res.longitude,
+				color: '#1989fa66',  // 透明度从33改为66
+				fillColor: '#1989fa22', // 填充色从11改为22
+				radius: selectedDistance.value * 1000,
+				strokeWidth: 2
+			}]
+
+			// 添加新的位置标记
+			mapState.markers = [{
+				id: 0,
+				latitude: res.latitude,
+				longitude: res.longitude,
+				iconPath: '/static/local.png',
+				width:20,
+				height: 20,
+				callout: {
+					content: res.name || res.address,
+					color: '#000000',
+					fontSize: 12,
+					borderRadius: 4,
+					padding: 8,
+					display: 'ALWAYS'
+				}
+			}]
+		},
+		fail: (err) => {
+			console.error('选择位置失败:', err);
+		}
+	})
+}
+
+// 范围选择改变
+const onDistanceChange = (e) => {
+	selectedDistance.value = distanceOptions[e.detail.value]
+	mapState.scale = adjustMapScale(Number(selectedDistance.value));
+	
+	// 更新圆形范围
+	mapState.circles = [{
+		latitude: mapState.latitude,
+		longitude: mapState.longitude,
+		color: '#1989fa66',  // 透明度从33改为66
+		fillColor: '#1989fa22', // 填充色从11改为22
+		radius: selectedDistance.value * 1000,
+		strokeWidth: 2
+	}]
+}
+
+// 添加 modal 相关的响应式变量
+const showModal = ref(false)
+const modalContent = ref('')
+
+// 添加 modal 相关的处理函数
+const handleModalConfirm = () => {
+	showModal.value = false
+	goToList()
+}
+
+const handleModalCancel = () => {
+	showModal.value = false
+}
+
+// 修改 searchNearbyPOI 函数
+const searchNearbyPOI = async () => {
+	if (!keyword.value) {
+		uni.showToast({
+			title: '请输入关键词',
+			icon: 'none'
+		})
+		return
+	}
+
+	uni.showLoading({
+		title: '搜索中...'
+	})
+
+	try {
+		// 先获取第一页数据
+
+		let currentPage = 1
+			let allData = []
+			let hasMoreData = true
+			
+			// 循环获取所有页面的数据
+			while (hasMoreData) {
+      
+				const pageData = await searchPOIByPage(currentPage)
+				// 如果当前页有数据，添加到总数组中
+				if (pageData && pageData.length > 0) {
+					allData = [...allData, ...pageData]
+					
+					// 如果返回的数据少于50条，说明没有更多数据了
+					if (pageData.length < 50) {
+						hasMoreData = false
+					} else {
+						currentPage++
+					}
+				} else {
+					hasMoreData = false
+				}
+			}
+			
+			// 更新收集到的数据
+			collectedItems.value = allData
+		
+
+	 const data = {
+		collect_type: "1",
+		collect_address:currentAddress.value,
+		collect_time: formatDate(new Date()),
+		key_words: keyword.value,
+		collection_result: collectedItems.value,
+		collect_location: `${mapState.latitude},${mapState.longitude}`,
+	 }
+
+	 console.log('222',data)
+
+//   uni.request({
+//     url: 'http://chat.ihealer.cn:9999/comboost/api/wechat/add_wx_records',
+//     method: 'POST',
+//     header: {
+//         'Content-Type': 'application/json',
+//         'token': uni.getStorageSync('token')
+//     },
+//     data: data
+// }).then(res => {
+// 		if (res.data.code == '401') {
+// 		    uni.showToast({
+// 		        title: '请求失效',
+// 		        duration: 2000,
+//             icon: 'none',
+// 		    })
+// 		    setTimeout(() => {
+// 		        uni.reLaunch({
+// 		            url: '/pages/login/index'
+// 		        })
+// 		    }, 2000)
+// 		}
+// 	 collect_batch_id.value = res.data.data.collect_batch_id
+//     console.log('res',res)
+// }).catch(err => {
+//     console.error('请求失败:', err)
+//     uni.showToast({
+//         title: '保存失败',
+//         icon: 'none'
+//     })
+// })
+		// 更新地图标记
+		if (collectedItems.value && collectedItems.value.length > 0) {
+			updateMapMarkers(collectedItems.value)
+			
+			// 使用 up-modal 显示采集完成提示
+			modalContent.value = `采集完成，共采集到 ${collectedItems.value.length} 条数据`
+			showModal.value = true
+		} else {
+			uni.showToast({
+				title: '未找到相关位置',
+				icon: 'none'
+			})
+		}
+		
+	} catch (error) {
+		console.error('搜索失败:', error)
+		uni.showToast({
+			title: '搜索失败',
+			icon: 'none'
+		})
+	} finally {
+		uni.hideLoading()
+	}
+}
+// 新增按页搜索的辅助函数
+const searchPOIByPage = (page) => {
+	return new Promise((resolve, reject) => {
+		const radius = selectedDistance.value * 1000
+		const location = `${mapState.longitude},${mapState.latitude}`
+		uni.request({
+			url: 'https://restapi.amap.com/v3/place/around',
+			method: 'GET',
+			data: {
+				key: '7d6f9f3723fc6572aaf13328ba8a504e',
+				location: location,
+				keywords: keyword.value,
+				radius: radius,
+				extensions: 'all',
+				offset: 50, // 每页记录数
+				page: page
+			},
+			success: (res) => {
+				if (res.data.status === '1' && res.data.pois) {
+					const pois = res.data.pois.map(poi => ({	
+				        id: poi.id,
+						name: poi.name,
+						address: poi.address,
+						tel: poi.tel || '暂无电话',
+						location: poi.location,
+						type: poi.type,
+						distance: poi.distance,
+						photos: poi?.photos[0]?.url || '',
+						pcode: poi.pcode,
+						adcode: poi.adcode,
+						pname: poi.pname,
+						adname: poi.adname,
+						citycode: poi.citycode,
+						bzi_type: poi.bzi_type,
+					}))
+					resolve(pois)
+				} else {
+					resolve([])
+				}
+			},
+			fail: (err) => {
+				reject(err)
+			}
+		})
+	})
+}
+
+// 更新地图标记的辅助函数
+const updateMapMarkers = (pois) => {
+	mapState.markers = [
+		// 保持当前位置的标记
+		{
+			id: 'current',
+				latitude: mapState.latitude,
+				longitude: mapState.longitude,
+				iconPath: '/static/local.png',
+				// #ifdef H5
+				width: 20,
+				height: 20,
+				// #endif
+				// #ifdef APP-PLUS
+				anchor: {
+					x: 0.5,
+					y: 0.5
+				},
+				width: '20px',
+				height: '20px',
+				// #endif
+				callout: {
+					content: '当前位置',
+					color: '#000000',
+					fontSize: 12,
+					borderRadius: 4,
+					padding: 8,
+					display: 'ALWAYS'
+				}
+		},
+		// 修改搜索结果的标记，默认不显示 callout
+	   // 添加搜索结果的标记，默认不显示信息窗口
+       ...pois.map((poi, index) => {
+            const [lng, lat] = poi.location.split(',')
+            return {
+                id: index + 1, // id从1开始，因为0是当前位置
+                latitude: lat,
+                longitude: lng,
+                iconPath: '/static/marker.png', // 使用不同的图标区分
+                // #ifdef H5
+                width: 20,
+                height: 20,
+                // #endif
+                // #ifdef APP-PLUS
+                anchor: {
+                    x: 0.5,
+                    y: 0.5
+                },
+                width: '20px',
+                height: '20px',
+                // #endif
+                callout: {
+                    content: `${poi.name}\n${poi.tel || '暂无电话'}`,
+                    color: '#000000',
+                    fontSize: 14,
+                    borderRadius: 4,
+                    padding: 8,
+                    display: 'BYCLICK' // 改为点击时显示
+                }
+            }
+        })
+	]
+}
+
+// 添加地图标记点击事件处理
+const onMarkerTap = (e) => {
+	const markerId = e.detail.markerId
+	if (markerId !== 'current') {
+		// 找到对应的 POI 信息
+		const poi = collectedItems.value[markerId]
+		if (poi) {
+			// 可以在这里添加更多点击后的操作
+			console.log('点击的POI信息:', poi)
+		}
+	}
+}
+
+// 修改开始采集按钮的处理函数
+const startCollect = () => {
+	searchNearbyPOI()
+}
+
+
+
+// 跳转到列表页面
+const goToList = () => {
+	uni.setStorageSync('collectedItems', collectedItems.value)
+	uni.setStorageSync('collectInfo', currentAddress.value)
+
+
+    uni.setStorageSync('searchKeyword', keyword.value)
+	 uni.setStorageSync('industry_name', '')
+
+
+
+
+	uni.navigateTo({
+	 url: `/pages/task/list?collect_batch_id=${collect_batch_id.value}`
+	})
+}
+
+// 页面加载时初始化
+onMounted(() => {
+	initData()
+})
+
+// onShow(() => {
+// 	initData()
+// })
+
+// 获取状态栏高度
+const statusBarHeight = ref(20)
+
+// 处理记录按钮点击
+const onRecordClick = () => {
+	uni.navigateTo({
+		url: '/pages/task/history'
+	})
+}
+
+// 添加返回按钮点击处理
+const onBackClick = () => {
+	uni.navigateBack({
+		delta: 1
+	})
+}
+</script>
+
+<style>
+
+
+.location-text {
+	flex: 1;
+	color: #333333;
+	font-size: 28rpx;
+}
+
+.container {
+  flex: 1;
+	flex-direction: column;
+	background-color: #f0f2f5;
+}
+
+.search-area {
+  background-image: linear-gradient(to bottom, #ffffff, #f8f9fc);
+	padding: 20rpx;
+	margin: 20rpx;
+	border-radius: 16rpx;
+}
+
+.search-item {
+  margin-bottom: 16rpx;
+}
+
+.search-item:last-child {
+    margin-bottom: 0;
+}   
+
+.input-box {
+  height: 80rpx;
+  font-size: 12px;
+	background-color: rgba(25, 137, 250, 0.05);
+	border-width: 2rpx;
+	border-style: solid;
+	border-color: rgba(25, 137, 250, 0.1);
+	border-radius: 12rpx;
+	padding-left: 24rpx;
+	padding-right: 24rpx;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+}
+
+/* 文字颜色和大小设置 */
+.input-box-text {
+    color: #333333;
+    font-size: 12px;
+}
+
+.map-container {
+  flex: 1;
+	margin: 0 20rpx 20rpx;
+	border-radius: 16rpx;
+	position: relative;
+}
+
+.map {
+	flex: 1;
+	width: 750rpx;
+	border-radius: 16rpx;
+
+}
+
+.footer {
+    padding: 10px;
+    flex-direction: column;
+}
+
+.collect-btn {
+    height: 44px;
+    line-height: 44px;
+    background-color: #1989fa;
+    border-radius: 22px;
+    /* 文字样式 */
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 500;
+    text-align: center;
+}
+
+/* 输入框特定样式 */
+.search-item-input {
+    flex: 1;
+    height: 45px;
+    font-size: 14px;
+    color: #333333;
+}
+
+/* placeholder样式 */
+
+/* 省市区选择器容器 */
+.picker-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: #ffffff;
+}
+
+/* 弹窗样式调整 */
+.modal-content {
+    padding: 15px;
+    align-items: center;
+}
+
+.modal-text {
+    font-size: 16px;
+    color: #333333;
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.nav-bar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #eee;
+}
+
+.nav-content {
+    height: 52px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding:  15px;
+}
+
+.nav-left {
+    width: 44px;
+    align-items: flex-start;
+    padding-top: 4px;
+}
+
+.nav-title {
+    flex: 1;
+    text-align: center;
+    font-size: 16px;
+    color: #000000;
+    font-weight: 500;
+}
+
+.nav-right {
+    width: 44px;
+    align-items: flex-end;
+    padding-top: 4px;
+}
+
+</style> 

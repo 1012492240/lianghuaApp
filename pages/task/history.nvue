@@ -1,0 +1,660 @@
+<template>
+    <view class="container">
+        <!-- 自定义导航栏 -->
+        <view class="nav-bar" :style="{ paddingTop: statusBarHeight + 10 + 'px' }">
+            <view class="nav-content">
+                <!-- 左侧返回按钮 -->
+                <view class="nav-left" @click="onBackClick">
+                    <u-icon name="arrow-left" size="20" color="#333333"></u-icon>
+                </view>
+                <!-- 居中标题 -->
+                <text class="nav-title">采集记录</text>
+                <!-- 右侧占位 -->
+                <view class="nav-right"></view>
+            </view>
+        </view>
+        
+        <!-- 数据统计区域 -->
+        <view class="statistics-section">
+            <view class="stat-item">
+                <text class="stat-value">{{ totalRecords }}</text>
+                <text class="stat-label">获客总次数</text>
+            </view>
+            <view class="stat-divider"></view>
+            <view class="stat-item">
+                <text class="stat-value">{{ totalCustomers }}</text>
+                <text class="stat-label">获客总数量</text>
+            </view>
+        </view>
+
+        <!-- 筛选区域 -->
+        <view class="filter-section">
+            <!-- 类型选择按钮组 -->
+            <view class="type-buttons">
+                <view 
+                    class="type-btn" 
+                    :class="{ 'type-btn-active': currentType === '' }"
+                    @click="currentType = ''"
+                >
+                    <text class="type-text" :class="{ 'type-text-active': currentType === '' }">全部</text>
+                </view>
+                <view 
+                    class="type-btn" 
+                    :class="{ 'type-btn-active': currentType === 'industry' }"
+                    @click="currentType = 'industry'"
+                >
+                    <text class="type-text" :class="{ 'type-text-active': currentType === 'industry' }">行业获客</text>
+                </view>
+                <view 
+                    class="type-btn" 
+                    :class="{ 'type-btn-active': currentType === 'nearby' }"
+                    @click="currentType = 'nearby'"
+                >
+                    <text class="type-text" :class="{ 'type-text-active': currentType === 'nearby' }">附近获客</text>
+                </view>
+            </view>
+            
+            <!-- 搜索框 -->
+            <view class="search-box">
+                <u--input
+                    v-model="searchKeyword"
+                    placeholder="搜索关键词"
+                    prefixIcon="search"
+                    :border="false"
+                    clearable
+                    @change="onSearchInput"
+                    customStyle="background: #F5F7FA; height: 80rpx; border-radius: 16rpx;"
+                >
+                    <template #prefix>
+                        <view class="search-prefix">
+                            <u-icon name="search" size="38" color="#909399"></u-icon>
+                        </view>
+                    </template>
+                </u--input>
+            </view>
+        </view>
+
+        <!-- 记录列表 -->
+        <scroll-view 
+            class="history-list" 
+            scroll-y 
+            @scrolltolower="onLoadMore"
+        >
+            <view v-if="filteredList.length > 0" style="margin-top:15px;">
+                <view 
+                    class="history-item" 
+                    v-for="(item, index) in filteredList" 
+                    :key="item.collect_batch_id"
+                    @click="onItemClick(item)"
+                    :hover-class="'history-item-hover'"
+                >
+                    <!-- 头部：类型和时间 -->
+                    <view class="item-header">
+                        <text class="item-type" :class="'item-type-' + (item.collect_type === '1' ? 'nearby' : 'industry')">
+                            {{ getTypeText(item.collect_type) }}
+                        </text>
+                        <text class="item-time">{{ formatTime(new Date(item.collect_time).getTime()) }}</text>
+                    </view>
+                    
+                    <!-- 主体内容 -->
+                    <view class="item-content">
+                        <text class="item-title">{{ getKeywordText(item) }}</text>
+                        <text v-if="item.collect_type === '0' && item.key_words" 
+                            class="item-keyword keyword-tag keyword-tag-industry"
+                        >
+                            关键词：{{ item.key_words }}
+                        </text>
+                        <text class="item-keyword">{{ item.collect_address }}</text>
+                    </view>
+                    
+                    <!-- 底部：数量和箭头 -->
+                    <view class="item-footer">
+                        <text class="item-count">共{{ item.data_cnt }}条数据</text>
+                        <u-icon name="arrow-right" size="14" color="#C0C4CC"></u-icon>
+                    </view>
+                </view>
+                
+                <!-- 加载状态提示 -->
+                <view class="loading-state">
+                    <text class="loading-text" v-if="loading">正在加载...</text>
+                    <text class="loading-text" v-else-if="finished">没有更多数据了</text>
+                </view>
+            </view>
+            <view v-else class="empty-state">
+                <u-icon name="file-text" size="48" color="#C0C4CC"></u-icon>
+                <text class="empty-text">暂无采集记录</text>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup>
+import { ref, onMounted, computed, watch } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+
+// 获取状态栏高度
+const statusBarHeight = ref(20)
+
+// 历史记录列表
+const historyList = ref([])
+
+// 筛选标签数据
+const filterTabs = [
+    { type: '', text: '全部' },
+    { type: 'industry', text: '行业获客' },
+    { type: 'nearby', text: '附近获客' }
+]
+
+// 当前选中的类型，默认选中全部
+const currentType = ref('')
+const searchKeyword = ref('')
+
+// 分页相关的变量
+const pageSize = ref(10)
+const currentPage = ref(1)
+const loading = ref(false)
+const finished = ref(false)
+
+// 筛选后的列表
+const filteredList = computed(() => {
+    return historyList.value
+})
+
+// 添加统计数据的响应式变量
+const totalRecords = ref(0)  // 获客总次数
+const totalCustomers = ref(0)  // 获客总数量
+
+// 获取历史记录的方法
+const getHistoryList = (type = '', keyword = '', isLoadMore = false) => {
+    // 如果不是加载更多，重置分页参数
+    if (!isLoadMore) {
+        currentPage.value = 1
+        finished.value = false
+        historyList.value = []
+    }
+    
+     console.log('data筛选项', {
+            key_words: keyword,
+            collect_type: type === 'industry' ? '0' : type === 'nearby' ? '1' : '',
+             page: currentPage.value,
+            size: pageSize.value
+        })
+    // 如果已经加载完所有数据，直接返回
+    if (finished.value && isLoadMore) return
+    loading.value = true
+    uni.request({
+        url: `http://chat.ihealer.cn:9999/comboost/api/wechat/get_wx_collect_records?page=${currentPage.value}&size=${pageSize.value}`,
+        method: 'post',
+        header: {
+            'Content-Type': 'application/json',
+            'token': uni.getStorageSync('token')
+        },
+        data: {
+            key_words: keyword,
+            collect_type: type === 'industry' ? '0' : type === 'nearby' ? '1' : '',
+        }
+    }).then(res => {
+        console.log('采集记录',res.data.code)
+		if (res.data.code == '401') {
+		    uni.showToast({
+		        title: '请求失效',
+		        duration: 2000,
+                        icon: 'none',
+		    })
+		    setTimeout(() => {
+		        uni.reLaunch({
+		            url: '/pages/login/index'
+		        })
+		    }, 2000)
+		}
+		
+        if (res.data?.code === 200) {
+            console.log('res.data.data111',res)
+            const list = res.data.data?.list || []
+            const total = res.data.data?.total || 0
+           
+            console.log('list列表',list)
+            // 转换数据
+            const newList = list.map(item => ({
+                ...item,
+                timestamp: new Date(item.collect_time).getTime(),
+                count: item.data_cnt
+            }))
+            
+            // 如果是加载更多，追加数据，否则替换数据
+            historyList.value = isLoadMore ? [...historyList.value, ...newList] : newList
+            
+            // 判断是否已加载完所有数据
+            finished.value = historyList.value.length >= total
+            
+            // 更新页码
+            if (!finished.value) {
+                currentPage.value++
+            }
+            
+            // 只在第一页时更新统计数据
+            if (!isLoadMore) {
+                totalRecords.value = res.data.data?.total || 0
+                totalCustomers.value = res.data.data?.cnt_detail || 0
+            }
+        }
+    }).catch(err => {
+        console.error('请求失败:', err)
+        uni.showToast({
+            title: '获取数据失败',
+            icon: 'none'
+        })
+    }).finally(() => {
+        loading.value = false
+    })
+}
+
+// 监听类型变化
+watch(currentType, (newType) => {
+    // 重置并重新加载数据
+    getHistoryList(newType, searchKeyword.value)
+})
+
+// 添加防抖函数
+const debounce = (fn, delay) => {
+    let timer = null
+    return function (...args) {
+        if (timer) clearTimeout(timer)
+        timer = setTimeout(() => {
+            fn.apply(this, args)
+        }, delay)
+    }
+}
+
+// 搜索输入处理（带防抖）
+const onSearchInput = (value) => {
+    console.log('搜索输入:', value)
+    searchKeyword.value = value
+    getHistoryList(currentType.value, value)
+}
+
+// 原有的搜索处理函数可以保留，用于其他地方可能的调用
+const onSearch = () => {
+    console.log('onSearch', {
+        type: currentType.value,
+        keyword: searchKeyword.value
+    })
+    getHistoryList(currentType.value, searchKeyword.value)
+}
+
+// 返回按钮点击处理
+const onBackClick = () => {
+    uni.navigateBack({
+        delta: 1
+    })
+}
+
+// 列表项点击处理
+const onItemClick = (item) => {
+    // 存储采集结果到本地
+    console.log('item',item.collection_result)
+    const data = JSON.parse(item.collection_result)
+    uni.setStorageSync('collectedItems', data || [])
+    // 存储其他相关信息
+    uni.setStorageSync('collectInfo', item.collect_address)
+    uni.setStorageSync('searchKeyword', item.key_words )
+    uni.setStorageSync('industry_name', item.industry_name)
+    uni.setStorageSync('collect_time', item.collect_time)
+    console.log('item.collect_batch_id',item)
+    // 跳转到列表页面
+  uni.navigateTo({
+    url: `/pages/task/list?collect_batch_id=${item.collect_batch_id}&msg_content=${item.msg_content}`
+})
+}
+
+// 页面加载时获取历史记录
+
+
+onShow(()=>{
+    getHistoryList()
+})
+
+// 获取采集类型文本
+const getTypeText = (type) => {
+    if (type === '1') return '附近获客'
+    if (type === '0') return '行业获客'
+    return '未知类型'
+}
+
+// 获取关键词文本
+const getKeywordText = (item) => {
+    if (item.collect_type === '0') {
+        if (item.industry_type) {
+            return `行业：${item.industry_name || item.industry_type}`
+        }
+        // 如果是行业获客但没有industry_type，只显示关键词
+        return `关键词：${item.key_words || '未知'}`
+    }
+    return `关键词：${item.key_words || '未知'}`
+}
+
+// 格式化时间
+const formatTime = (timestamp) => {
+    const date = new Date(timestamp)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hours}:${minutes}`
+}
+
+// 添加加载更多的处理函数
+const onLoadMore = () => {
+    if (!loading.value && !finished.value) {
+        getHistoryList(currentType.value, searchKeyword.value, true)
+    }
+}
+</script>
+
+<style>
+.container {
+    flex: 1;
+    flex-direction: column;
+    background-color: #F5F7FA;
+}
+
+.nav-bar {
+    background-color: #ffffff;
+    border-bottom-width: 1px;
+    border-bottom-color: #EBEEF5;
+}
+
+.nav-content {
+    height: 52px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 15px;
+}
+
+.nav-left {
+    width: 44px;
+    align-items: flex-start;
+    padding-top: 4px;
+}
+
+.nav-title {
+    flex: 1;
+    text-align: center;
+    font-size: 16px;
+    color: #303133;
+    font-weight: 500;
+}
+
+.nav-right {
+    width: 44px;
+}
+
+.history-list {
+    flex: 1;
+    padding: 0px 15px;
+    background-color: #F5F7FA;
+}
+
+.history-item {
+
+    background-color: #ffffff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    flex-direction: column;
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.history-item-hover {
+    background-color: #F5F7FA;
+    transform: scale(0.98);
+}
+
+.item-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.item-type {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.item-type-nearby {
+    color: #409EFF;
+    background-color: rgba(64, 158, 255, 0.1);
+}
+
+.item-type-industry {
+    color: #36B378;
+    background-color: rgba(54, 179, 120, 0.1);
+}
+
+.item-type-keyword {
+    color: #946FE5;
+    background-color: rgba(148, 111, 229, 0.1);
+}
+
+.item-time {
+    font-size: 12px;
+    color: #909399;
+}
+
+.item-content {
+    margin-bottom: 12px;
+}
+
+.item-title {
+    font-size: 16px;
+    color: #303133;
+    font-weight: 500;
+    margin-bottom: 8px;
+    lines: 1;
+    text-overflow: ellipsis;
+}
+
+.item-keyword {
+    font-size: 14px;
+    color: #606266;
+    lines: 1;
+    text-overflow: ellipsis;
+}
+
+.item-footer {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    border-top-width: 1px;
+    border-top-color: #EBEEF5;
+    padding-top: 12px;
+}
+
+.item-count {
+    font-size: 13px;
+    color: #409EFF;
+}
+
+.empty-state {
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 30px;
+}
+
+.empty-text {
+    font-size: 14px;
+    color: #909399;
+    margin-top: 12px;
+}
+
+/* 筛选区域样式 */
+.filter-section {
+    background-color: #FFFFFF;
+    padding: 24rpx 30rpx;
+    margin-bottom: 20rpx;
+}
+
+/* 类型选择按钮组 */
+.type-buttons {
+    flex-direction: row;
+    justify-content: space-between;
+    margin-bottom: 16rpx;
+    padding: 8rpx;
+    background-color: #F5F7FA;
+    border-radius: 12rpx;
+}
+
+.type-btn {
+    flex: 1;
+    height: 64rpx;
+    justify-content: center;
+    align-items: center;
+    margin: 0 4rpx;
+    border-radius: 8rpx;
+    transition: all 0.3s;
+}
+
+.type-btn-active {
+    background-color: #FFFFFF;
+    box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+}
+
+.type-text {
+    font-size: 26rpx;
+    color: #666666;
+    font-weight: 400;
+}
+
+.type-text-active {
+    color: #3A7FFF;
+    font-weight: 500;
+}
+
+/* 搜索框样式 */
+.search-box {
+    margin-top: 16rpx;
+    padding: 0 4rpx;
+}
+
+/* 输入框样式优化 */
+:deep(.u-input) {
+    background: #F5F7FA !important;
+    border-radius: 16rpx;
+}
+
+:deep(.u-input__content) {
+    padding: 0 24rpx;
+    height: 80rpx;
+}
+
+:deep(.u-input__content__field-wrapper) {
+    margin-left: 12rpx;
+}
+
+:deep(.u-input__content__field) {
+    font-size: 28rpx;
+    color: #333333;
+}
+
+:deep(.u-input__content__clear) {
+    margin-left: 8rpx;
+    background-color: #E4E7ED;
+    border-radius: 50%;
+    width: 32rpx;
+    height: 32rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+:deep(.u-input__content__clear__icon) {
+    color: #FFFFFF;
+    font-size: 24rpx;
+}
+
+/* 搜索图标容器 */
+.search-prefix {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-right: 6rpx;
+}
+
+/* placeholder样式 */
+:deep(.u-input__content__field-wrapper__field--disabled) {
+    color: #909399;
+}
+
+/* 修改关键词标签样式 */
+.keyword-tag {
+    font-size: 13px;
+    color: #946FE5;
+    background-color: rgba(148, 111, 229, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    align-self: stretch; /* 默认占满整行 */
+}
+
+/* 行业获客关键词标签样式 */
+.keyword-tag-industry {
+    align-self: flex-start; /* 宽度适应内容 */
+}
+
+/* 在 style 部分添加加载状态的样式 */
+.loading-state {
+    padding: 20rpx 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.loading-text {
+    font-size: 24rpx;
+    color: #909399;
+    text-align: center;
+}
+
+/* 添加统计区域样式 */
+.statistics-section {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    background-color: #FFFFFF;
+    padding: 20rpx 30rpx;
+    margin-bottom: 2rpx;
+}
+
+.stat-item {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.stat-value {
+    font-size: 24px;
+    color: #303133;
+    font-weight: 600;
+    margin-bottom: 4rpx;
+}
+
+.stat-label {
+    font-size: 14px;
+    color: #909399;
+}
+
+.stat-divider {
+    width: 1px;
+    height: 30px;
+    background-color: #EBEEF5;
+}
+
+/* 修改筛选区域的上边距 */
+.filter-section {
+    margin-bottom: 20rpx;
+}
+</style> 

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>评论获客助手</title>
+  <script>
+    function handleStart() {
+
+      putCallback('wx', {
+        type: 'start'
+      });
+
+    }
+  </script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .float-window {
+      background: #FFFFFF;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+    }
+
+    .header {
+      background: #1976D2;
+      color: white;
+      padding: 6px;
+      font-size: 14px;
+      text-align: center;
+      font-weight: 500;
+    }
+
+    .status-section {
+      padding: 8px;
+      text-align: center;
+      border-bottom: 1px solid #EEEEEE;
+    }
+
+    .status-label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 2px;
+    }
+
+    .status-value {
+      font-size: 14px;
+      color: #1976D2;
+      font-weight: 500;
+    }
+
+    .button-group {
+      display: flex;
+      padding: 8px;
+      gap: 6px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 4px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      border: none;
+    }
+
+    .btn-primary {
+      background: #1976D2;
+      color: white;
+    }
+
+    .btn-outline {
+      background: white;
+      border: 1px solid #1976D2;
+      color: #1976D2;
+    }
+
+    .btn-danger {
+      background: white;
+      border: 1px solid #FF5252;
+      color: #FF5252;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="float-window">
+    <!-- 顶部标题栏 -->
+    <header class="header">
+      评论获客助手
+    </header>
+
+    <!-- 状态显示 -->
+    <div class="status-section">
+      <div class="status-label">当前状态</div>
+      <div id="status" class="status-value">准备就绪</div>
+    </div>
+
+    <!-- 按钮组 -->
+    <div class="button-group">
+      <button id="startBtn" class="btn btn-primary" onclick="handleStart()">开始</button>
+      <button id="pauseBtn" class="btn btn-outline">暂停</button>
+      <button id="closeBtn" class="btn btn-danger" onclick="Android.hide()">关闭</button>
+    </div>
+  </div>
+</body>
+
+</html>
