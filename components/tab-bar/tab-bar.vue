@@ -20,7 +20,7 @@
             size="44rpx"
             :color="
               currentPath === item.pagePath
-                ? '#7A88FF'
+                ? '#a98cff'
                 : 'rgba(255,255,255,0.6)'
             "
           ></u-icon>
@@ -163,8 +163,8 @@ onMounted(() => {
 
       &.active {
         .tab-text {
-          color: #7a88ff;
-          text-shadow: 0 0 10rpx rgba(122, 136, 255, 0.3);
+          color: #a98cff;
+          text-shadow: 0 0 10rpx rgba(169, 140, 255, 0.3);
         }
       }
     }

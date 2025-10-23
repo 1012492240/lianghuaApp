@@ -6,7 +6,7 @@
         <view class="header">
           <view class="header-content">
             <u-icon name="account" size="22" @click="goToUser"></u-icon>
-            <text class="app-title">首页</text>
+            <text class="app-title">量化交易</text>
             <u-icon name="chat" size="22" @click="goToNotice"></u-icon>
           </view>
         </view>
@@ -22,8 +22,8 @@
           interval="5000" 
           duration="1000" 
           circular
-          indicator-color="rgba(255, 255, 255, 0.3)"
-          indicator-active-color="#f3d535"
+          indicator-color="rgba(169, 140, 255, 0.3)"
+          indicator-active-color="#a98cff"
         >
           <swiper-item v-for="(item, index) in bannerList" :key="index">
  
@@ -250,7 +250,8 @@ const goToUser = () => {
 <style lang="scss" scoped>
 .container {
   min-height: 100vh;
-  background-color: #000000;
+  background: linear-gradient(135deg, #0E0026, #1a003d, #2a004d);
+  background-attachment: fixed;
   /* 隐藏滚动条 */
   ::-webkit-scrollbar {
     display: none;
@@ -264,12 +265,25 @@ const goToUser = () => {
   display: none;
 }
 
+/* 科技感光效效果 */
+.container::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 20% 30%, rgba(70, 47, 124, 0.2) 0%, transparent 40%),
+              radial-gradient(circle at 80% 70%, rgba(70, 47, 124, 0.2) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: -1;
+}
+
 .header {
   height: 45px;
-  background-color: #121212;
-  // background-color: white;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
-  border-bottom: 1px solid #333333;
+  background: linear-gradient(90deg, #0E0026, #2a004d);
+  box-shadow: 0 1px 15px rgba(70, 47, 124, 0.5);
+  border-bottom: 1px solid #462F7C;
   transition: all 0.3s ease;
   z-index: 9999;
 
@@ -284,7 +298,8 @@ const goToUser = () => {
   .app-title {
     font-size: 16px;
     font-weight: 500;
-    color: #f3d535;
+    color: #a98cff;
+    text-shadow: 0 0 10px rgba(169, 140, 255, 0.5);
   }
 }
 
@@ -292,8 +307,10 @@ const goToUser = () => {
   margin: 15px 0;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-  border: 1px solid #333333;
+  box-shadow: 0 4px 25px rgba(70, 47, 124, 0.4);
+  border: 1px solid #462F7C;
+  background: rgba(14, 0, 38, 0.7);
+  backdrop-filter: blur(10px);
   
   .banner-swiper {
     height: 140px;
@@ -309,30 +326,31 @@ const goToUser = () => {
   margin: 15px 0;
   
   .api-auth-button {
-    background: linear-gradient(90deg, #121212, #222222);
-    border: 1px solid #f3d535;
+    background: linear-gradient(90deg, #1a003d, #2a004d);
+    border: 1px solid #462F7C;
     border-radius: 12px;
     padding: 15px;
     display: flex;
     align-items: center;
-    box-shadow: 0 4px 15px rgba(243, 213, 53, 0.2);
+    box-shadow: 0 4px 20px rgba(70, 47, 124, 0.3);
     transition: all 0.3s ease;
     
     &:active {
       transform: translateY(2px);
-      box-shadow: 0 2px 10px rgba(243, 213, 53, 0.2);
+      box-shadow: 0 2px 15px rgba(70, 47, 124, 0.3);
     }
     
     .api-icon {
       width: 40px;
       height: 40px;
-      background: rgba(243, 213, 53, 0.2);
+      background: rgba(70, 47, 124, 0.3);
       border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
       margin-right: 12px;
-      border: 1px solid #f3d535;
+      border: 1px solid #462F7C;
+      box-shadow: 0 0 10px rgba(70, 47, 124, 0.3);
     }
     
     .api-content {
@@ -344,12 +362,13 @@ const goToUser = () => {
       .api-title {
         font-size: 16px;
         font-weight: 500;
-        color: #f3d535;
+        color: #a98cff;
+        text-shadow: 0 0 5px rgba(169, 140, 255, 0.3);
       }
       
       .api-desc {
         font-size: 12px;
-        color: rgba(243, 213, 53, 0.8);
+        color: rgba(169, 140, 255, 0.8);
       }
     }
     
@@ -357,19 +376,20 @@ const goToUser = () => {
       margin-left: 10px;
       
       ::v-deep .u-icon {
-        color: #f3d535 !important;
+        color: #a98cff !important;
       }
     }
   }
 }
 
 .other-functions {
-  background-color: #121212;
+  background: rgba(14, 0, 38, 0.7);
   border-radius: 12px;
   padding: 15px;
   margin-bottom: 15px;
-  box-shadow: 0 3px 15px rgba(0, 0, 0, 0.5);
-  border: 1px solid #333333;
+  box-shadow: 0 4px 20px rgba(70, 47, 124, 0.3);
+  border: 1px solid #462F7C;
+  backdrop-filter: blur(10px);
   
   .function-row {
     display: flex;
@@ -394,26 +414,28 @@ const goToUser = () => {
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 3px 10px rgba(70, 47, 124, 0.4);
         transition: all 0.2s ease;
-        background: #222222;
-        border: 1px solid #444444;
+        background: linear-gradient(135deg, #1a003d, #2a004d);
+        border: 1px solid #462F7C;
       }
       
       .function-text {
         font-size: 12px;
-        color: #cccccc;
+        color: #c0b0ff;
         text-align: center;
       }
       
       &:active {
         .function-icon {
           transform: scale(0.95);
-          border-color: #f3d535;
+          border-color: #a98cff;
+          box-shadow: 0 0 10px rgba(169, 140, 255, 0.5);
         }
         
         .function-text {
-          color: #f3d535;
+          color: #ffffff;
+          text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
         }
       }
     }
@@ -433,22 +455,24 @@ const goToUser = () => {
   .section-title {
     font-size: 16px;
     font-weight: 500;
-    color: #f3d535;
+    color: #a98cff;
+    text-shadow: 0 0 5px rgba(169, 140, 255, 0.3);
   }
 
   .more-text {
     font-size: 13px;
-    color: #888888;
+    color: #a090e0;
   }
 }
 
 .notice-section {
-  background-color: #121212;
+  background: rgba(14, 0, 38, 0.7);
   border-radius: 12px;
   padding: 12px 15px;
   margin-bottom: 15px;
-  box-shadow: 0 3px 15px rgba(0, 0, 0, 0.5);
-  border: 1px solid #333333;
+  box-shadow: 0 4px 20px rgba(70, 47, 124, 0.3);
+  border: 1px solid #462F7C;
+  backdrop-filter: blur(10px);
 
   .notice-content {
     display: flex;
@@ -458,7 +482,7 @@ const goToUser = () => {
     .notice-text {
       flex: 1;
       font-size: 13px;
-      color: #aaaaaa;
+      color: #c0b0ff;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -467,12 +491,13 @@ const goToUser = () => {
 }
 
 .market-section {
-  background-color: #121212;
+  background: rgba(14, 0, 38, 0.7);
   border-radius: 12px;
   padding: 12px 15px;
   margin-bottom: 15px;
-  box-shadow: 0 3px 15px rgba(0, 0, 0, 0.5);
-  border: 1px solid #333333;
+  box-shadow: 0 4px 20px rgba(70, 47, 124, 0.3);
+  border: 1px solid #462F7C;
+  backdrop-filter: blur(10px);
 
   .market-list {
     .market-item {
@@ -480,7 +505,7 @@ const goToUser = () => {
       justify-content: space-between;
       align-items: center;
       padding: 12px 0;
-      border-bottom: 1px solid #333333;
+      border-bottom: 1px solid #462F7C;
 
       &:last-child {
         border-bottom: none;
@@ -500,7 +525,7 @@ const goToUser = () => {
 
           .coin-symbol {
             font-size: 12px;
-            color: #888888;
+            color: #a090e0;
             font-weight: normal;
           }
         }
@@ -520,12 +545,14 @@ const goToUser = () => {
 
         .change-up {
           font-size: 13px;
-          color: #4caf50;
+          color: #6affbb;
+          text-shadow: 0 0 5px rgba(106, 255, 187, 0.3);
         }
 
         .change-down {
           font-size: 13px;
-          color: #f44336;
+          color: #ff6a95;
+          text-shadow: 0 0 5px rgba(255, 106, 149, 0.3);
         }
       }
     }

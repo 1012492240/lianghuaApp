@@ -32,7 +32,7 @@ onMounted(() => {
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background: transparent !important;
+		background: linear-gradient(90deg, #0E0026, #2a004d) !important;
 		backdrop-filter: blur(20px);
 	}
 }

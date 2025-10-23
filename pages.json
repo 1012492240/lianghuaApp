@@ -83,7 +83,7 @@
 			}
 		},
 		{
-			"path": "pages/notice/index",
+			"path": "pages/tactic/index",
 			"style": {
 				"navigationStyle": "custom",
 				"navigationBarTextStyle": "white",
@@ -213,7 +213,7 @@
 				"selectedIconPath": "static/homeSelect.png"
 			},
 			{
-				"pagePath": "pages/notice/index",
+				"pagePath": "pages/tactic/index",
 				"text": "策略",
 				"iconPath": "static/tactic.png",
 				"selectedIconPath": "static/tacticSelect.png"

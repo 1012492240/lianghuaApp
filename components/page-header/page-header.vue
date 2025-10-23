@@ -44,7 +44,7 @@ onMounted(() => {
 	z-index: 100;
 
 	.status-bar { 
-		background-color: #121212;
+		background: linear-gradient(90deg, #0E0026, #2a004d);
 	}
 	
 	.header-content {
